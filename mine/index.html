@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mining Game</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Courier New', monospace;
+        }
+        
+        #game-container {
+            border: 2px solid #333;
+            background: #000;
+        }
+        
+        #ui-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #fff;
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="ui-panel">
+            <div>Level: <span id="level-display">1</span></div>
+            <div>Depth: <span id="depth-display">0</span>m</div>
+            <div>Health: <span id="health-display">100</span></div>
+        </div>
+    </div>
+    
+    <!-- Load class files -->
+    <script src="Camera.js"></script>
+    <script src="Player.js"></script>
+    <script src="Room.js"></script>
+    <script src="Exit.js"></script>
+    <script src="LevelGenerator.js"></script>
+    <script src="game.js"></script>
+</body>
+</html> 

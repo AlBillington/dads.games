@@ -1,0 +1,13 @@
+ea4bc82a6ad023ab7ee23ee620429895
+::res://::1751269061
+README.md::TextFile/TextFile::-1::1751164038::0::1::::<><><>0<>0<><>::
+::res://scenes/::1751164194
+Exit.tscn::PackedScene::300891871132620163::1751164193::0::1::::<><><>0<>0<><>::uid://diyifyfhsa43w::::res://scripts/Exit.gd
+Main.tscn::PackedScene/PackedScene::3558212198754643331::1751164126::0::1::::<><><>0<>0<><>::res://scripts/GameManager.gd
+Player.tscn::PackedScene::7137843224294294915::1751164193::0::1::::<><><>0<>0<><>::uid://cvx52rqh64brd::::res://scripts/Player.gd
+Room.tscn::PackedScene::2687312554825721219::1751164194::0::1::::<><><>0<>0<><>::uid://cfilsal1gl0dd::::res://scripts/Room.gd
+::res://scripts/::1751164177
+Exit.gd::GDScript/GDScript::7770813799819215106::1751164118::0::1::::<>Area2D<><>0<>0<><>::
+GameManager.gd::GDScript/GDScript::2770152198601401058::1751164068::0::1::::<>Node2D<><>0<>0<><>::
+Player.gd::GDScript/GDScript::6296158416321122177::1751164088::0::1::::<>CharacterBody2D<><>0<>0<><>::
+Room.gd::GDScript/GDScript::5141000657002210437::1751164110::0::1::::<>Node2D<><>0<>0<><>::

@@ -1,0 +1,56 @@
+<!-- jQuery -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<!-- jQuery Terminal -->
+<link href="https://unpkg.com/jquery.terminal/css/jquery.terminal.min.css" rel="stylesheet"/>
+<script src="https://unpkg.com/jquery.terminal/js/jquery.terminal.min.js"></script>
+<style>
+    /* Make the terminal font larger */
+    .terminal {
+        --size: 1.5;
+    }
+
+    /* Center the terminal wrapper */
+    body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    background: black;
+}
+
+#terminal-wrapper {
+    display: flex;
+    flex-direction: column;
+    background: black;
+    border: 2px solid #333;
+    font-family: monospace;
+}
+
+#money-panel {
+    background: #111;
+    color: #0f0;
+    padding: 8px 12px;
+    font-size: 1.1em;
+    display: none;
+    border-bottom: 1px solid #333;
+}
+
+#terminal {
+    width: 800px;
+    height: 600px;
+}
+
+</style>
+
+<body>
+    <div id="terminal-wrapper">
+        <div id="money-panel">
+            💰 Money: $<span id="money-value">0</span>
+        </div>
+        <div id="terminal"></div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
