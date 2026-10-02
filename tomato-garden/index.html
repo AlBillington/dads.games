@@ -1,0 +1,1710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Tomato Grower</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: full-bleed 3D pot, plant cards in a left column, one tool shelf along the bottom. Water is blue, health is green, trouble is red. */
+:root{
+  --bg-top:#e3ece6; --bg-bot:#c9d9cf;
+  --ink:#13261b; --ink-2:#496055;
+  --line:rgba(19,38,27,.18);
+  --panel:rgba(246,250,246,.86);
+  --accent:#d43a22; --accent-ink:#ffffff;
+  --chip:rgba(19,38,27,.07);
+  --ok:#2f8f4e; --warn:#c98a12; --wet:#2f7fb8; --bad:#c9342a; --zone:rgba(47,143,78,.26);
+  --font-display:'Bricolage Grotesque',system-ui,sans-serif;
+  --font-body:'Instrument Sans',system-ui,sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg-top:#1d3427; --bg-bot:#0c1812;
+    --ink:#e8f1ea; --ink-2:#9db4a5;
+    --line:rgba(232,241,234,.2);
+    --panel:rgba(14,28,20,.84);
+    --accent:#ff6a4a; --accent-ink:#1a0a05;
+    --chip:rgba(232,241,234,.09);
+    --ok:#5fd48a; --warn:#f0b84a; --wet:#6cb8f0; --bad:#ff7a63; --zone:rgba(95,212,138,.22);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg-top:#1d3427; --bg-bot:#0c1812;
+  --ink:#e8f1ea; --ink-2:#9db4a5;
+  --line:rgba(232,241,234,.2);
+  --panel:rgba(14,28,20,.84);
+  --accent:#ff6a4a; --accent-ink:#1a0a05;
+  --chip:rgba(232,241,234,.09);
+  --ok:#5fd48a; --warn:#f0b84a; --wet:#6cb8f0; --bad:#ff7a63; --zone:rgba(95,212,138,.22);
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--bg-bot);color:var(--ink);font-family:var(--font-body);font-size:14px;overflow:hidden}
+.app{position:relative;height:100%}
+#stage{position:absolute;inset:0;background:radial-gradient(120% 95% at 50% 28%,var(--bg-top),var(--bg-bot))}
+#gl{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.top{position:absolute;top:0;left:0;right:0;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:10px 16px;padding:14px 16px;pointer-events:none}
+.top>*{pointer-events:auto}
+.brand h1{margin:0;font-family:var(--font-display);font-weight:700;font-size:1.5rem;letter-spacing:-.02em;line-height:1.1}
+.brand p{margin:4px 0 0;font-family:var(--font-mono);font-size:.72rem;color:var(--ink-2);letter-spacing:.02em;font-variant-numeric:tabular-nums}
+.top-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{border:1px solid var(--line);background:var(--panel);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-radius:999px;padding:7px 14px;font-size:.8rem;font-weight:500}
+.btn:hover{border-color:var(--ink-2)}
+.btn.toggle[aria-pressed="true"]{background:var(--ink);color:var(--bg-bot);border-color:var(--ink)}
+.speed{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--panel);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.speed button{border:0;background:transparent;padding:7px 12px;font-family:var(--font-mono);font-size:.76rem}
+.speed button[aria-pressed="true"]{background:var(--ink);color:var(--bg-bot)}
+.speed-label{font-family:var(--font-mono);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2)}
+
+.toast{position:absolute;top:64px;left:50%;transform:translateX(-50%);padding:7px 14px;border:1px solid var(--line);border-radius:999px;background:var(--panel);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-size:.82rem;opacity:0;pointer-events:none;transition:opacity .2s;z-index:3;white-space:nowrap}
+.toast.show{opacity:1}
+
+.bottom{position:absolute;left:16px;right:16px;bottom:16px;display:grid;justify-items:center;gap:10px;pointer-events:none}
+.bottom>*{pointer-events:auto}
+.tip{margin:0;max-width:min(600px,100%);padding:7px 16px;border:1px solid var(--line);border-radius:999px;background:var(--panel);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font-size:.82rem;text-align:center;line-height:1.35}
+.toolbar{display:flex;gap:8px;padding:8px;border:1px solid var(--line);border-radius:18px;background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.tool{display:grid;justify-items:center;gap:3px;min-width:96px;padding:10px 14px 7px;border:1px solid transparent;border-radius:12px;background:var(--chip);font-weight:600;font-size:.82rem}
+.tool:hover{border-color:var(--line)}
+.tool svg{width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tool kbd{font-family:var(--font-mono);font-size:.62rem;color:var(--ink-2);font-weight:400}
+.tool[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.tool[aria-pressed="true"] kbd{color:inherit;opacity:.8}
+
+.garden{position:fixed;top:84px;left:16px;width:264px;max-height:calc(100% - 270px);overflow-y:auto;display:grid;gap:10px;align-content:start;pointer-events:none}
+.garden>*{pointer-events:auto}
+.garden.hidden{display:none}
+.empty{margin:0;padding:12px 14px;border:1px dashed var(--line);border-radius:12px;background:var(--panel);font-size:.82rem;line-height:1.4;color:var(--ink-2)}
+.card{display:grid;gap:7px;padding:11px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);cursor:pointer}
+.card header{display:flex;align-items:center;gap:8px}
+.card header strong{font-family:var(--font-display);font-size:.98rem;letter-spacing:-.01em}
+.card .x{margin-left:auto;width:24px;height:24px;border:0;border-radius:50%;background:var(--chip);font-size:1rem;line-height:1;display:grid;place-items:center}
+.card .x:hover{background:var(--line)}
+.stage{margin:0;font-size:.76rem;color:var(--ink-2)}
+.chip{font-family:var(--font-mono);font-size:.64rem;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:999px;border:1px solid currentColor}
+.chip.ok{color:var(--ok)} .chip.warn{color:var(--warn)} .chip.wet{color:var(--wet)} .chip.bad{color:var(--bad)} .chip.idle{color:var(--ink-2)}
+.meter{display:grid;grid-template-columns:48px 1fr;align-items:center;gap:8px}
+.meter span{font-family:var(--font-mono);font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+.bar{position:relative;height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.bar i{position:absolute;top:0;bottom:0;left:0;display:block}
+.bar .zone{left:23%;width:50%;background:var(--zone)}
+.bar .fill{border-radius:4px;background:var(--ok);transition:width .25s}
+.card[data-s="warn"] .fill.water{background:var(--warn)}
+.card[data-s="wet"] .fill.water{background:var(--wet)}
+.card[data-s="bad"] .fill.water{background:var(--bad)}
+.card[data-s="idle"] .fill.water{background:var(--ink-2)}
+.fill.health{background:var(--ok)}
+.bar .pnr{left:20%;width:2px;background:var(--bad);opacity:.85}
+.card[data-s="bad"] .fill.health{background:var(--bad)}
+.note{margin:0;font-size:.74rem;line-height:1.35;color:var(--ink-2);min-height:1.35em}
+
+@media (max-width:860px){
+  .garden{position:static;width:100%;max-height:none;display:flex;overflow-x:auto;overflow-y:hidden;pointer-events:auto;padding-bottom:2px}
+  .card{flex:0 0 228px}
+  .empty{flex:1}
+  .toast{top:96px}
+}
+@media (max-width:560px){
+  .tool{min-width:0;flex:1;padding:8px 8px 6px}
+  .toolbar{width:100%}
+  .brand h1{font-size:1.2rem}
+  .speed-label{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+</head>
+<body>
+<main class="app">
+  <div id="stage"><canvas id="gl" role="img" aria-label="A 3D raised garden bed with cherry tomato plants. Drag to orbit, right-drag to pan, scroll to zoom."></canvas></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <header class="top">
+    <div class="brand">
+      <h1>Tomato Grower</h1>
+      <p>Garden day <span id="gDay">0</span> · harvested <span id="gHarv">0</span></p>
+    </div>
+    <div class="top-actions">
+      <span class="speed-label">Timelapse</span>
+      <div class="speed" role="group" aria-label="Timelapse speed">
+        <button type="button" data-speed="0" aria-pressed="false">Pause</button>
+        <button type="button" data-speed="1" aria-pressed="true">1×</button>
+        <button type="button" data-speed="2" aria-pressed="false">2×</button>
+        <button type="button" data-speed="4" aria-pressed="false">4×</button>
+      </div>
+      <button class="btn toggle" id="panelBtn" type="button" aria-pressed="true">Plant status</button>
+      <button class="btn toggle" id="auto" type="button" aria-pressed="false">Auto-water</button>
+      <button class="btn toggle" id="roots" type="button" aria-pressed="true">Roots</button>
+      <button class="btn toggle" id="spin" type="button" aria-pressed="false">Auto-rotate</button>
+      <button class="btn" id="clear" type="button">Clear bed</button>
+    </div>
+  </header>
+
+  <section class="bottom">
+    <aside class="garden" id="garden" aria-label="Your plants">
+      <p class="empty" id="gardenEmpty">No plants yet. Choose Seed, then click the soil to plant one.</p>
+    </aside>
+    <p class="tip" id="tip"></p>
+    <div class="toolbar" role="toolbar" aria-label="Tools">
+      <button class="tool" type="button" data-tool="seed" aria-pressed="true">
+        <svg viewBox="0 0 26 26" aria-hidden="true"><path d="M13 22v-8"/><path d="M13 14c0-4-3-6-7-6 0 4 3 6 7 6z"/><path d="M13 12c0-3.5 2.5-5.5 6.5-5.5 0 3.5-2.5 5.5-6.5 5.5z"/><path d="M5 22h16"/></svg>
+        Seed<kbd>1</kbd></button>
+      <button class="tool" type="button" data-tool="water" aria-pressed="false">
+        <svg viewBox="0 0 26 26" aria-hidden="true"><path d="M13 3.5c3.5 4.5 6 7.6 6 11a6 6 0 0 1-12 0c0-3.4 2.5-6.500 6-11z"/><path d="M10 15.500a3 3 0 0 0 2.500 2.800"/></svg>
+        Water<kbd>2</kbd></button>
+      <button class="tool" type="button" data-tool="trellis" aria-pressed="false">
+        <svg viewBox="0 0 26 26" aria-hidden="true"><path d="M6 23V3M20 23V3"/><path d="M6 8h14M6 14h14M6 20h14"/></svg>
+        Trellis<kbd>3</kbd></button>
+      <button class="tool" type="button" data-tool="prune" aria-pressed="false">
+        <svg viewBox="0 0 26 26" aria-hidden="true"><circle cx="7" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><path d="M9 17L19 4M17 17L7 4"/></svg>
+        Pick &amp; prune<kbd>4</kbd></button>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+'use strict';
+const TAU=Math.PI*2;
+const clamp=(x,a=0,b=1)=>x<a?a:x>b?b:x;
+const lerp=(a,b,t)=>a+(b-a)*t;
+const smooth=x=>{x=clamp(x);return x*x*(3-2*x)};
+function rng(seed){let a=seed>>>0;return()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296}}
+
+const MAX_DAY=140;           // days from sowing; 1 world unit = 10 cm
+const HX=8, HZ=4, BED_BOTTOM=-3.4;   // garden bed half-width, half-depth, floor
+const SEED_POS=new THREE.Vector3(0,-0.06,0), HYPO=0.62;
+let clock=0, pendingSpawns=[];
+const UP=new THREE.Vector3(0,1,0), ZAXIS=new THREE.Vector3(0,0,1), XAXIS=new THREE.Vector3(1,0,0);
+
+const STAGES=[
+ [0,'Seed','Buried in moist soil, the dry seed soaks up water and swells.'],
+ [4,'Germination','The seed coat splits. The radicle, the first root, turns downward and anchors the plant.'],
+ [7,'Emergence','The hypocotyl pushes up through the soil as a hook, dragging the folded seed leaves behind it.'],
+ [12,'Seedling','The two cotyledons open and begin photosynthesis. Lateral roots start to branch.'],
+ [19,'Vegetative growth','A new compound leaf unfurls at every node while the stem thickens and side shoots form.'],
+ [48,'Flowering','Flower buds form on trusses and open yellow. A shake of the anther cone releases pollen.'],
+ [61,'Fruit set','Petals drop and the pollinated ovaries swell into small green tomatoes.'],
+ [80,'Ripening','Chlorophyll breaks down and lycopene builds. Green fruit turns orange, then red.'],
+ [98,'Harvest','The lowest clusters are ripe and ready to pick. Old lower leaves yellow and drop while the top keeps growing.']
+];
+
+/* ---------- renderer / scene ---------- */
+const canvas=document.getElementById('gl');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.75));
+renderer.setClearColor(0x000000,0);
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.shadowMap.autoUpdate=false; renderer.shadowMap.needsUpdate=true;
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(34,1,0.03,300);
+
+scene.add(new THREE.HemisphereLight(0xeaf5ff,0x3d3a2a,0.9));
+const sun=new THREE.DirectionalLight(0xfff0d8,0.95);
+sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.bias=-0.0006;
+sun.shadow.normalBias=0.015;
+sun.shadow.camera.near=1; sun.shadow.camera.far=200;
+scene.add(sun,sun.target);
+const fill=new THREE.DirectionalLight(0xbcd4ff,0.3);
+fill.position.set(-6,3,-5); scene.add(fill);
+
+/* ---------- raised bed and soil ---------- */
+function hash2(i,j){const s=Math.sin(i*127.1+j*311.7)*43758.5453;return s-Math.floor(s);}
+function vnoise(x,y){
+  const i=Math.floor(x),j=Math.floor(y),fx=x-i,fy=y-j,u=fx*fx*(3-2*fx),v=fy*fy*(3-2*fy);
+  return lerp(lerp(hash2(i,j),hash2(i+1,j),u),lerp(hash2(i,j+1),hash2(i+1,j+1),u),v);
+}
+const groundY=(x,z)=>0.05*(vnoise(x*2+3,z*2+7)-0.5)+0.022*(vnoise(x*7+1,z*7+5)-0.5);
+function mkCanvas(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return c;}
+function soilTextures(){
+  const S=512, r=rng(7), pal=['#241710','#2f2016','#3d2a1b','#4b3523','#5d442d','#6e5339'];
+  const cc=mkCanvas(S,S), bc=mkCanvas(S,S), g=cc.getContext('2d'), b=bc.getContext('2d');
+  g.fillStyle='#3a2819'; g.fillRect(0,0,S,S); b.fillStyle='#808080'; b.fillRect(0,0,S,S);
+  for(let i=0;i<170;i++){
+    const x=r()*S,y=r()*S,rad=14+r()*60,dark=r()<0.55;
+    for(const [ctx,col] of [[g,dark?'rgba(18,10,5,0.2)':'rgba(125,92,60,0.14)'],[b,dark?'rgba(40,40,40,0.25)':'rgba(190,190,190,0.2)']]){
+      const gr=ctx.createRadialGradient(x,y,0,x,y,rad); gr.addColorStop(0,col); gr.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=gr; ctx.fillRect(x-rad,y-rad,rad*2,rad*2);
+    }
+  }
+  for(let i=0;i<15000;i++){
+    const x=r()*S,y=r()*S,s=1+r()*2.6,a=0.4+r()*0.5,l=50+r()*140|0;
+    g.globalAlpha=a; g.fillStyle=pal[r()*pal.length|0]; g.fillRect(x,y,s,s);
+    b.globalAlpha=a; b.fillStyle='rgb('+l+','+l+','+l+')'; b.fillRect(x,y,s,s);
+  }
+  g.globalAlpha=1; b.globalAlpha=1;
+  for(let i=0;i<230;i++){   // perlite
+    const x=r()*S,y=r()*S,rad=1+r()*2.4;
+    g.fillStyle='rgba(224,218,202,0.92)'; g.beginPath(); g.arc(x,y,rad,0,TAU); g.fill();
+    b.fillStyle='#d8d8d8'; b.beginPath(); b.arc(x,y,rad,0,TAU); b.fill();
+  }
+  for(let i=0;i<110;i++){   // bark and root fragments
+    const x=r()*S,y=r()*S,a=r()*Math.PI,w=3+r()*7;
+    for(const [ctx,col] of [[g,r()<0.5?'#5b3b22':'#7a5230'],[b,'#a0a0a0']]){
+      ctx.save(); ctx.translate(x,y); ctx.rotate(a); ctx.fillStyle=col; ctx.fillRect(-w/2,-0.7,w,1.4+r()); ctx.restore();
+    }
+  }
+  const mk=c=>{const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(8,4);t.anisotropy=4;return t;};
+  return {map:mk(cc),bump:mk(bc)};
+}
+function wallTexture(){
+  const c=mkCanvas(256,512), g=c.getContext('2d'), r=rng(11);
+  const gr=g.createLinearGradient(0,0,0,512); gr.addColorStop(0,'#4d3827'); gr.addColorStop(1,'#271a11');
+  g.fillStyle=gr; g.fillRect(0,0,256,512);
+  const pal=['#1e130b','#3b2a1b','#5d442d','#6e5339'];
+  for(let i=0;i<5000;i++){g.globalAlpha=0.4+r()*0.5;g.fillStyle=pal[r()*pal.length|0];const s=1+r()*3;g.fillRect(r()*256,r()*512,s,s);}
+  g.globalAlpha=1;
+  for(let i=0;i<150;i++){g.fillStyle='rgba(224,218,202,0.9)';g.beginPath();g.arc(r()*256,r()*512,1+r()*2.2,0,TAU);g.fill();}
+  const t=new THREE.CanvasTexture(c); t.wrapS=THREE.RepeatWrapping; t.repeat.set(4,1); return t;
+}
+/* ---------- procedural textures: leaf veins, wood grain, bamboo, fruit skin ---------- */
+function leafTextures(){
+  const W=512,H=256, r=rng(5), cc=mkCanvas(W,H), bc=mkCanvas(W,H), g=cc.getContext('2d'), b=bc.getContext('2d');
+  g.fillStyle='#d6d6d6'; g.fillRect(0,0,W,H); b.fillStyle='#6c6c6c'; b.fillRect(0,0,W,H);
+  for(let i=0;i<300;i++){
+    const x=r()*W,y=r()*H,rad=10+r()*38,dark=r()<0.55;
+    for(const [ctx,col] of [[g,dark?'rgba(120,120,120,0.1)':'rgba(255,255,255,0.14)'],[b,dark?'rgba(40,40,40,0.12)':'rgba(190,190,190,0.1)']]){
+      const gr=ctx.createRadialGradient(x,y,0,x,y,rad); gr.addColorStop(0,col); gr.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=gr; ctx.fillRect(x-rad,y-rad,rad*2,rad*2);
+    }
+  }
+  const cy=H/2;
+  const stroke=(ctx,x0,y0,qx,qy,x1,y1,w,col)=>{ctx.strokeStyle=col;ctx.lineWidth=w;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x0,y0);ctx.quadraticCurveTo(qx,qy,x1,y1);ctx.stroke();};
+  stroke(g,0,cy,W/2,cy,W,cy,8,'#ffffff'); stroke(b,0,cy,W/2,cy,W,cy,8,'#fafafa');
+  for(let k=0;k<11;k++){
+    const x0=14+k*44, len=100+r()*30;
+    for(const sd of [-1,1]){
+      const x1=x0+len, y1=cy+sd*(104-k*3.5), qx=x0+len*0.35, qy=cy+sd*(18+r()*14);
+      stroke(g,x0,cy,qx,qy,x1,y1,3.2,'rgba(255,255,255,0.95)'); stroke(b,x0,cy,qx,qy,x1,y1,3.2,'#f2f2f2');
+      for(let s=1;s<6;s++){
+        const t=s/6, px=lerp(lerp(x0,qx,t),lerp(qx,x1,t),t), py=lerp(lerp(cy,qy,t),lerp(qy,y1,t),t);
+        const ex=px+26+r()*14, ey=py+sd*(22+r()*16);
+        stroke(g,px,py,px+10,py+sd*8,ex,ey,1.3,'rgba(255,255,255,0.6)'); stroke(b,px,py,px+10,py+sd*8,ex,ey,1.3,'rgba(220,220,220,0.8)');
+      }
+    }
+  }
+  for(let i=0;i<1400;i++){
+    g.fillStyle=r()<0.5?'rgba(255,255,255,0.35)':'rgba(100,100,100,0.12)'; g.fillRect(r()*W,r()*H,1.2,1.2);
+    b.fillStyle='rgba(200,200,200,0.4)'; b.fillRect(r()*W,r()*H,1.2,1.2);
+  }
+  const mk=c=>{const t=new THREE.CanvasTexture(c);t.anisotropy=4;return t;};
+  return {map:mk(cc),bump:mk(bc)};
+}
+function woodTexture(){
+  const S=256,c=mkCanvas(S,S),g=c.getContext('2d'),r=rng(21);
+  g.fillStyle='#9a7650'; g.fillRect(0,0,S,S);
+  for(let i=0;i<160;i++){
+    const y=r()*S,w=0.6+r()*2.2,a=0.08+r()*0.2;
+    g.strokeStyle=r()<0.5?'rgba(60,38,20,'+a+')':'rgba(196,156,106,'+a+')'; g.lineWidth=w; g.beginPath(); g.moveTo(0,y);
+    for(let x=0;x<=S;x+=32)g.lineTo(x,y+Math.sin(x*0.03+i)*2+(r()-0.5)*1.5);
+    g.stroke();
+  }
+  for(let i=0;i<3;i++){
+    const x=r()*S,y=r()*S;
+    for(let k=4;k>0;k--){g.strokeStyle='rgba(50,30,16,'+(0.12+0.06*(5-k))+')';g.lineWidth=1.4;g.beginPath();g.ellipse(x,y,k*5,k*2.4,0,0,TAU);g.stroke();}
+  }
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(8,1); t.anisotropy=4; return t;
+}
+function bambooTexture(){
+  const W=64,H=256,c=mkCanvas(W,H),g=c.getContext('2d'),r=rng(33);
+  const gr=g.createLinearGradient(0,0,W,0); gr.addColorStop(0,'#b99556'); gr.addColorStop(0.5,'#dcc082'); gr.addColorStop(1,'#ae8a4c');
+  g.fillStyle=gr; g.fillRect(0,0,W,H);
+  for(let i=0;i<70;i++){g.fillStyle='rgba('+(r()<0.5?'70,48,20':'240,220,160')+','+(0.05+r()*0.12)+')';g.fillRect(r()*W,0,0.6+r()*1.4,H);}
+  g.fillStyle='rgba(70,45,20,0.6)'; g.fillRect(0,H-12,W,5);
+  g.fillStyle='rgba(235,215,160,0.5)'; g.fillRect(0,H-7,W,3);
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(1,6); t.anisotropy=4; return t;
+}
+function fruitTextures(){
+  const S=128,r=rng(44),cc=mkCanvas(S,S),bc=mkCanvas(S,S),g=cc.getContext('2d'),b=bc.getContext('2d');
+  g.fillStyle='#f0f0f0'; g.fillRect(0,0,S,S); b.fillStyle='#909090'; b.fillRect(0,0,S,S);
+  for(let i=0;i<420;i++){
+    const x=r()*S,y=r()*S,s=0.8+r()*1.8;
+    g.fillStyle='rgba(120,120,120,'+(0.06+r()*0.1)+')'; g.fillRect(x,y,s,s);
+    b.fillStyle='rgba('+(r()<0.5?'40,40,40':'210,210,210')+',0.35)'; b.fillRect(x,y,s,s);
+  }
+  const mk=c=>{const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(2,1);t.anisotropy=4;return t;};
+  return {map:mk(cc),bump:mk(bc)};
+}
+const leafTex=leafTextures(), woodTex=woodTexture(), bambooTex=bambooTexture(), fruitTex=fruitTextures();
+
+const soilTex=soilTextures();
+const soilMat=new THREE.MeshStandardMaterial({map:soilTex.map,bumpMap:soilTex.bump,bumpScale:2.2,roughness:1,vertexColors:true});
+let soilGeo;
+const moundGeo=new THREE.SphereGeometry(1,28,10,0,TAU,0,Math.PI/2), moundMat=new THREE.MeshStandardMaterial({map:soilTex.map,bumpMap:soilTex.bump,bumpScale:2.2,roughness:1});
+(function(){   // uneven soil surface across the whole bed
+  const g=new THREE.PlaneGeometry(2*HX,2*HZ,160,80), p=g.attributes.position;
+  for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i);p.setZ(i,groundY(x,-y));}
+  g.computeVertexNormals();
+  g.setAttribute('color',new THREE.Float32BufferAttribute(new Float32Array(p.count*3).fill(1),3)); soilGeo=g;
+  const m=new THREE.Mesh(g,soilMat); m.rotation.x=-Math.PI/2; m.receiveShadow=true; scene.add(m);
+  const r=rng(31), dummy=new THREE.Object3D(), col=new THREE.Color();
+  const mkInst=(n,geo,mat,fn)=>{
+    const im=new THREE.InstancedMesh(geo,mat,n);
+    for(let i=0;i<n;i++){
+      const x=(r()*2-1)*(HX-0.15), z=(r()*2-1)*(HZ-0.15);
+      fn(x,z,dummy,col);
+      dummy.updateMatrix(); im.setMatrixAt(i,dummy.matrix); im.setColorAt(i,col);
+    }
+    im.receiveShadow=true; im.frustumCulled=false; scene.add(im);
+  };
+  mkInst(6500,new THREE.IcosahedronGeometry(1,0),new THREE.MeshStandardMaterial({roughness:1,flatShading:true}),(x,z,o,c)=>{
+    const s=0.012+Math.pow(r(),2.4)*0.06;
+    o.position.set(x,groundY(x,z)+s*0.2,z); o.rotation.set(r()*3,r()*3,r()*3); o.scale.set(s*(0.8+0.5*r()),s*(0.5+0.4*r()),s*(0.8+0.5*r()));
+    const t=r(); c.setRGB(lerp(0.1,0.34,t),lerp(0.065,0.22,t),lerp(0.04,0.14,t));
+    if(r()<0.08)c.setRGB(0.42,0.4,0.37);   // small stones
+  });
+  mkInst(2200,new THREE.IcosahedronGeometry(1,0),new THREE.MeshStandardMaterial({roughness:0.9,flatShading:true}),(x,z,o,c)=>{
+    const s=0.01+r()*0.016;
+    o.position.set(x,groundY(x,z)+s*0.3,z); o.rotation.set(r()*3,r()*3,0); o.scale.set(s,s*0.8,s); c.setRGB(0.9,0.88,0.8);   // perlite
+  });
+})();
+const soilWallMat=new THREE.MeshStandardMaterial({map:wallTexture(),roughness:1,transparent:true,opacity:0.36,side:THREE.DoubleSide,depthWrite:false});
+const BED_H=-BED_BOTTOM;
+for(const [w,px,pz,ry] of [[2*HX,0,HZ,0],[2*HX,0,-HZ,0],[2*HZ,HX,0,Math.PI/2],[2*HZ,-HX,0,Math.PI/2]]){
+  const wall=new THREE.Mesh(new THREE.PlaneGeometry(w,BED_H),soilWallMat); wall.position.set(px,BED_BOTTOM/2,pz); wall.rotation.y=ry; wall.renderOrder=5; scene.add(wall);
+}
+const soilFloor=new THREE.Mesh(new THREE.PlaneGeometry(2*HX,2*HZ),new THREE.MeshStandardMaterial({color:0x2a1d13,roughness:1}));
+soilFloor.rotation.x=-Math.PI/2; soilFloor.position.y=BED_BOTTOM+0.04; scene.add(soilFloor);
+const wood=new THREE.MeshStandardMaterial({map:woodTex,roughness:.82});
+for(const [sx,sy,sz,px,pz] of [[2*HX+0.7,0.3,0.28,0,HZ+0.12],[2*HX+0.7,0.3,0.28,0,-HZ-0.12],[0.28,0.3,2*HZ+0.5,HX+0.12,0],[0.28,0.3,2*HZ+0.5,-HX-0.12,0]]){
+  const b=new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz),wood); b.position.set(px,0.1,pz); b.castShadow=true; b.receiveShadow=true; scene.add(b);
+}
+const bedBase=new THREE.Mesh(new THREE.BoxGeometry(2*HX+0.9,0.3,2*HZ+0.9),new THREE.MeshStandardMaterial({color:0x2a2d28,roughness:.7}));
+bedBase.position.y=BED_BOTTOM-0.12; scene.add(bedBase);
+const floorShadow=new THREE.Mesh(new THREE.PlaneGeometry(160,160),new THREE.ShadowMaterial({opacity:0.24}));
+floorShadow.rotation.x=-Math.PI/2; floorShadow.position.y=BED_BOTTOM-0.28; floorShadow.receiveShadow=true; scene.add(floorShadow);
+
+function setRootsView(on){
+  soilWallMat.opacity=on?0.36:0.97;
+  soilWallMat.depthWrite=!on;
+}
+
+
+/* ---------- geometry helpers ---------- */
+class GeoBuilder{
+  constructor(){this.p=[];this.c=[];this.uv=[];this.i=[];this.n=0}
+  vert(x,y,z,col,u,v){this.p.push(x,y,z);this.c.push(col[0],col[1],col[2]);this.uv.push(u||0,v||0);return this.n++}
+  tri(a,b,c){this.i.push(a,b,c)}
+  geometry(){
+    const g=new THREE.BufferGeometry();
+    g.setAttribute('position',new THREE.Float32BufferAttribute(this.p,3));
+    g.setAttribute('color',new THREE.Float32BufferAttribute(this.c,3));
+    g.setAttribute('uv',new THREE.Float32BufferAttribute(this.uv,2));
+    g.setIndex(this.i); g.computeVertexNormals(); return g;
+  }
+}
+const _m=new THREE.Matrix4(),_e=new THREE.Euler(),_v=new THREE.Vector3(),_q=new THREE.Quaternion(),_one=new THREE.Vector3(1,1,1);
+const BLADE_DEFAULT={ox:0,oy:0,oz:0,yaw:0,pitch:0.05,pitchFold:0.9,roll:0,len:0.9,wid:0.5,phase:0,lobe:0.3,lobeN:3.4,tooth:0,teethN:8,veinN:6,pucker:0.6,dmg:0,
+  shapeExp:0.8,shapeSharp:0.85,vOpen:0.32,vFold:1.7,rows:12,cLeaf:[0.17,0.38,0.11],cEdge:[0.25,0.5,0.15],cRib:[0.55,0.7,0.32]};
+const BLADE_COLS=[-1,-0.5,0,0.5,1], NC=BLADE_COLS.length;
+/* One leaflet: a lobed, serrated, V-folded blade with lateral veins and puckering. f=0 open, f=1 folded (the morph target). */
+function addBlade(B,o,f){
+  const s=Object.assign({},BLADE_DEFAULT,o);
+  const yaw=lerp(s.yaw,s.yaw*0.12,f), pitch=lerp(s.pitch,s.pitchFold,f), vAmt=lerp(s.vOpen,s.vFold,f);
+  _e.set(s.roll,yaw,pitch,'YXZ');
+  _m.compose(_v.set(s.ox,s.oy,s.oz),_q.setFromEuler(_e),_one);
+  const base=B.n;
+  for(let r=0;r<=s.rows;r++){
+    const u=r/s.rows;
+    const prof=Math.pow(Math.max(0,Math.sin(Math.PI*Math.pow(u,s.shapeExp))),s.shapeSharp);
+    for(let ci=0;ci<NC;ci++){
+      const c=BLADE_COLS[ci], ac=Math.abs(c), side=c<0?1:0;
+      const lobe=s.lobe?1+s.lobe*Math.cos(u*TAU*s.lobeN+s.phase+side*1.7)*Math.pow(ac,1.5):1;
+      const tooth=s.tooth?(((u*s.teethN+side*0.37+s.phase)%1+1)%1-0.5)*s.tooth*ac*ac:0;
+      const half=s.wid*0.5*prof*(lobe+tooth);
+      const z=c*half, x=u*s.len;
+      const vein=c===0?0:Math.pow(Math.max(0,Math.cos((u*s.veinN-ac*0.6+side*0.25)*TAU)),6)*(1-ac*0.35);
+      const y=ac*half*vAmt-0.28*s.len*u*u+s.pucker*0.05*half*(0.5-vein)*(1-f)+0.02*Math.sin(u*10+c*2+s.phase)*half*(1-f);
+      _v.set(x,y,z).applyMatrix4(_m);
+      let col=c===0?s.cRib:s.cLeaf, k=0.92+0.16*u+0.06*Math.sin(u*7+c*3+s.phase);
+      let rr=col[0]*k, gg=col[1]*k, bb=col[2]*k;
+      if(c!==0){
+        const vm=vein*0.3, em=Math.pow(ac,3)*0.45;
+        rr=lerp(rr,s.cRib[0],vm);gg=lerp(gg,s.cRib[1],vm);bb=lerp(bb,s.cRib[2],vm);
+        rr=lerp(rr,s.cEdge[0],em);gg=lerp(gg,s.cEdge[1],em);bb=lerp(bb,s.cEdge[2],em);
+        if(s.dmg>0){
+          const n=Math.sin(u*17+s.phase*3)*Math.sin(c*5+s.phase)+0.6*Math.sin(u*31+c*9);
+          const t=clamp((n-(1.15-s.dmg*0.6))*3)*smooth((ac-0.3)*2);
+          rr=lerp(rr,0.34,t);gg=lerp(gg,0.22,t);bb=lerp(bb,0.08,t);
+        }
+      }
+      B.vert(_v.x,_v.y,_v.z,[rr,gg,bb],u,(c+1)/2);
+    }
+  }
+  for(let r=0;r<s.rows;r++)for(let c=0;c<NC-1;c++){
+    const a=base+r*NC+c,b=a+1,cc=a+NC,d=a+NC+1;
+    B.tri(a,b,cc);B.tri(b,d,cc);
+  }
+}
+function addTube(B,fn,radFn,rings,sides,col){
+  const base=B.n;
+  for(let i=0;i<=rings;i++){
+    const t=i/rings, p=fn(t), p2=fn(Math.min(1,t+0.01)), p1=fn(Math.max(0,t-0.01));
+    const T=new THREE.Vector3(p2[0]-p1[0],p2[1]-p1[1],p2[2]-p1[2]).normalize();
+    const n=new THREE.Vector3().crossVectors(T,ZAXIS).normalize();
+    const b=new THREE.Vector3().crossVectors(T,n);
+    const r=radFn(t);
+    for(let j=0;j<sides;j++){
+      const a=j/sides*TAU, cs=Math.cos(a), sn=Math.sin(a);
+      B.vert(p[0]+(n.x*cs+b.x*sn)*r,p[1]+(n.y*cs+b.y*sn)*r,p[2]+(n.z*cs+b.z*sn)*r,col);
+    }
+  }
+  for(let i=0;i<rings;i++)for(let j=0;j<sides;j++){
+    const a=base+i*sides+j,b=base+i*sides+(j+1)%sides,c=a+sides,d=b+sides;
+    B.tri(a,c,b);B.tri(b,c,d);
+  }
+}
+
+/* ---------- procedural compound leaf: every leaf draws its own random layout ---------- */
+function leafPlan(r){
+  const Lr=1.5+0.7*r(), arch=0.13+0.09*r(), drp=0.07+0.06*r();
+  const ry=x=>arch*x-drp*x*x;
+  const specs=[], pairs=2+Math.floor(r()*3.6), Ls=0.95*(0.78+0.45*r()), asym=0.82+0.36*r();
+  const tint=0.84+0.3*r(), yel=r()*0.1;
+  const cLeaf=[(0.17+yel)*tint,(0.38-yel*0.4)*tint,0.11*tint];
+  const common=()=>({cLeaf,phase:r()*6,lobeN:2.4+r()*1.8,lobe:0.16+0.28*r(),tooth:0.07+0.1*r(),teethN:Math.floor(6+r()*5),veinN:4+Math.floor(r()*4),
+    pucker:0.4+0.9*r(),dmg:r()<0.28?0.3+0.7*r():0,vOpen:0.22+0.2*r(),shapeExp:0.7+0.2*r()});
+  const t0=0.22+0.06*r(), t1=0.8-0.06*r();
+  for(let j=0;j<pairs;j++){
+    const t=pairs===1?0.5:t0+(t1-t0)*j/(pairs-1);
+    for(const side of [-1,1]){
+      const tt=t+(side>0?0.03+0.04*r():0)+(r()-0.5)*0.03, x=tt*Lr;
+      const len=Ls*(1-0.1*j)*(0.74+0.42*r())*(side>0?asym:1/asym);
+      specs.push(Object.assign(common(),{ox:x,oy:ry(x),yaw:side*(0.9+0.55*r()),pitch:(r()-0.25)*0.3,roll:(r()-0.5)*0.55,len,wid:len*(0.46+0.16*r())}));
+    }
+    if(j<pairs-1&&r()<0.8){
+      const side=r()<0.5?-1:1, x=(t+(t1-t0)/(pairs-1)*(0.35+0.3*r()))*Lr;
+      specs.push(Object.assign(common(),{ox:x,oy:ry(x),yaw:side*(1.1+0.4*r()),pitch:0.05,roll:(r()-0.5)*0.5,len:0.2+0.2*r(),wid:0.12+0.1*r(),rows:8,lobe:0.1}));
+    }
+  }
+  if(r()<0.45)for(const side of [-1,1]){   // tiny basal leaflets
+    const x=0.12*Lr; specs.push(Object.assign(common(),{ox:x,oy:ry(x),yaw:side*1.3,len:0.16+0.1*r(),wid:0.1,rows:6,lobe:0.1,tooth:0.05}));
+  }
+  const tl=Ls*(1+0.35*r());
+  specs.push(Object.assign(common(),{ox:Lr,oy:ry(Lr),yaw:(r()-0.5)*0.25,pitch:(r()-0.5)*0.2,roll:(r()-0.5)*0.3,len:tl,wid:tl*(0.52+0.2*r()),lobe:0.3+0.25*r()}));
+  return {specs,Lr,ry};
+}
+function buildLeafGeometry(r){
+  const {specs,Lr,ry}=leafPlan(r);
+  const make=f=>{
+    const B=new GeoBuilder();
+    for(const s of specs)addBlade(B,s,f);
+    addTube(B,t=>[t*Lr,ry(t*Lr),0],t=>lerp(0.022,0.006,t),14,5,[0.34,0.5,0.2]);
+    return B;
+  };
+  const open=make(0), closed=make(1);
+  const g=open.geometry();
+  g.morphAttributes.position=[new THREE.Float32BufferAttribute(closed.p,3)];
+  return g;
+}
+function buildCotyledonGeometry(){
+  const spec={len:0.5,wid:0.14,lobe:0,shapeExp:0.55,shapeSharp:0.6,vOpen:0.2,vFold:1.4,pitch:0,pitchFold:0,rows:12,veinN:3,pucker:0.2,
+    cLeaf:[0.36,0.6,0.26],cEdge:[0.42,0.66,0.3],cRib:[0.6,0.76,0.4]};
+  const make=f=>{const B=new GeoBuilder();addBlade(B,spec,f);return B;};
+  const g=make(0).geometry();
+  g.morphAttributes.position=[new THREE.Float32BufferAttribute(make(1).p,3)];
+  return g;
+}
+
+/* ---------- shared flower / fruit geometry ---------- */
+function buildFlowerGeometry(){
+  const make=open=>{
+    const B=new GeoBuilder();
+    const green=[0.3,0.5,0.16];
+    for(let k=0;k<6;k++){
+      const a=k/6*TAU, ca=Math.cos(a), sa=Math.sin(a), sp=1+open*0.35;
+      const i0=B.vert(-sa*0.011,0.004,ca*0.011,green), i1=B.vert(sa*0.011,0.004,-ca*0.011,green);
+      const i2=B.vert(ca*0.05*sp,0.085,sa*0.05*sp,green);
+      B.tri(i0,i1,i2);
+    }
+    const len=0.14, phi0=lerp(0.1,1.75,open);
+    for(let k=0;k<6;k++){
+      const az=k/6*TAU+0.26, cA=Math.cos(az), sA=Math.sin(az);
+      const rows=5, ids=[];
+      for(let i=0;i<=rows;i++){
+        const t=i/rows;
+        const phi=phi0*(0.7+0.3*t)+0.55*open*t;
+        const dx=Math.sin(phi)*cA, dy=Math.cos(phi), dz=Math.sin(phi)*sA;
+        const d=0.012+t*len, w=0.028*Math.pow(Math.sin(Math.PI*Math.min(1,0.12+0.9*t)),0.8)*(1-0.4*t);
+        const col=[1.0-0.12*(1-t),0.8-0.1*(1-t),0.08];
+        ids.push([B.vert(dx*d-sA*w,dy*d,dz*d+cA*w,col),B.vert(dx*d+sA*w,dy*d,dz*d-cA*w,col)]);
+      }
+      for(let i=0;i<rows;i++){
+        B.tri(ids[i][0],ids[i][1],ids[i+1][0]);B.tri(ids[i][1],ids[i+1][1],ids[i+1][0]);
+      }
+    }
+    const an=[0.92,0.62,0.05], tip=B.vert(0,0.075,0,an), ring=[];
+    for(let j=0;j<8;j++){const a=j/8*TAU;ring.push(B.vert(Math.cos(a)*0.02,0.006,Math.sin(a)*0.02,an));}
+    for(let j=0;j<8;j++)B.tri(ring[j],ring[(j+1)%8],tip);
+    return B;
+  };
+  const g=make(1).geometry();
+  g.morphAttributes.position=[new THREE.Float32BufferAttribute(make(0).p,3)]; // morph 1 = closed bud
+  return g;
+}
+function buildFruitGeometry(){
+  const g=new THREE.SphereGeometry(1,30,22);
+  const p=g.attributes.position;
+  for(let i=0;i<p.count;i++){
+    let x=p.getX(i),y=p.getY(i),z=p.getZ(i);
+    const phi=Math.atan2(z,x), lobes=1+0.03*Math.cos(5*phi)*(1-y*y);
+    x*=lobes;z*=lobes;y*=0.86;
+    if(y>0.55){const q=(y-0.55)/0.31;y-=0.13*q*q*q;}
+    if(y<-0.6)y*=0.97;
+    p.setXYZ(i,x,y,z);
+  }
+  g.computeVertexNormals(); return g;
+}
+function buildCalyxGeometry(){
+  const B=new GeoBuilder(), c=[0.28,0.47,0.14], c2=[0.2,0.36,0.1];
+  for(let k=0;k<5;k++){
+    const a=k/5*TAU+0.3, ca=Math.cos(a), sa=Math.sin(a);
+    const i0=B.vert(-sa*0.11,0.02,ca*0.11,c), i1=B.vert(sa*0.11,0.02,-ca*0.11,c);
+    const im=B.vert(ca*0.34,0.01,sa*0.34,c), i2=B.vert(ca*0.62,-0.1,sa*0.62,c2);
+    B.tri(i0,i1,im);B.tri(i0,im,i2);B.tri(i1,i2,im);
+  }
+  const top=B.vert(0,0.12,0,c), ring=[];
+  for(let j=0;j<6;j++){const a=j/6*TAU;ring.push(B.vert(Math.cos(a)*0.07,0,Math.sin(a)*0.07,c2));}
+  for(let j=0;j<6;j++)B.tri(ring[j],ring[(j+1)%6],top);
+  return B.geometry();
+}
+const flowerGeo=buildFlowerGeometry(), fruitGeo=buildFruitGeometry(), calyxGeo=buildCalyxGeometry(), cotGeo=buildCotyledonGeometry();
+const pedGeo=new THREE.CylinderGeometry(1,1,1,5,1); pedGeo.translate(0,0.5,0);
+const calyxMat=new THREE.MeshStandardMaterial({vertexColors:true,side:THREE.DoubleSide,roughness:.7});
+const pedMat=new THREE.MeshStandardMaterial({color:0x6b8f3f,roughness:.7});
+const tubeMat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.74,side:THREE.DoubleSide});
+const C_STEM=[0.36,0.52,0.21],C_TRUSS=[0.45,0.6,0.22],C_TEND=[0.5,0.68,0.3],C_ROOT=[0.92,0.87,0.74];
+
+/* ---------- Axis: a growing tube (stem, shoot, truss, tendril or root) ---------- */
+const COS=new Map();
+function ringTrig(M){if(!COS.has(M)){const c=[],s=[];for(let j=0;j<M;j++){c.push(Math.cos(j/M*TAU));s.push(Math.sin(j/M*TAU));}COS.set(M,[c,s]);}return COS.get(M);}
+let CUR=null;
+const _P=new THREE.Vector3();
+
+/* Many thin axes (roots) share one mesh so a mature plant costs one draw call for its whole root system. */
+class Batch{
+  constructor(mat){this.mat=mat;this.items=[];this.nv=0;this.dirty=false;}
+  reserve(a){a.vo=this.nv;this.nv+=a.V;this.items.push(a);}
+  finalize(plant){
+    const nv=this.nv, pos=new Float32Array(nv*3), nrm=new Float32Array(nv*3), col=new Float32Array(nv*3), idx=[];
+    for(const a of this.items){
+      const M=a.M,N=a.N,vo=a.vo;
+      for(let v=0;v<a.V;v++){const o=3*(vo+v);col[o]=a.col[0];col[o+1]=a.col[1];col[o+2]=a.col[2];}
+      for(let i=0;i<N;i++)for(let j=0;j<M;j++){const x=vo+i*M+j,y=vo+i*M+(j+1)%M,z=x+M,w=y+M;idx.push(x,z,y,y,z,w);}
+      a.PA=pos;a.NA=nrm;a.CA=col;
+    }
+    const g=new THREE.BufferGeometry();
+    this.pa=new THREE.BufferAttribute(pos,3).setUsage(THREE.DynamicDrawUsage);
+    this.na=new THREE.BufferAttribute(nrm,3).setUsage(THREE.DynamicDrawUsage);
+    this.ca=new THREE.BufferAttribute(col,3).setUsage(THREE.DynamicDrawUsage);
+    g.setAttribute('position',this.pa);g.setAttribute('normal',this.na);g.setAttribute('color',this.ca);
+    g.setIndex(new THREE.BufferAttribute(new Uint32Array(idx),1));
+    this.mesh=new THREE.Mesh(g,this.mat); this.mesh.frustumCulled=false; this.mesh.castShadow=false;
+    plant.group.add(this.mesh); plant.disp.push(g);
+  }
+  flush(){if(this.dirty&&this.pa){this.pa.needsUpdate=true;this.na.needsUpdate=true;this.ca.needsUpdate=true;this.dirty=false;}}
+}
+
+class Axis{
+  constructor(o){
+    Object.assign(this,{kind:'stem',parent:null,parentS:0,N:24,M:6,hookFn:null,droopFn:null,col:C_STEM,cast:true,rFactor:0,rMin:0,blend:false,batch:null,isMain:false,removed:false,phi0:0,vo:0},o);
+    this.base0=(o.base0||new THREE.Vector3()).clone();
+    const N=this.N;
+    this.pos=new Float32Array(3*(N+1)); this.tan=new Float32Array(3*(N+1));
+    this.tab=new Float32Array(3*(N+1)); this.fin=new Float32Array(3*(N+1));
+    this.L=0; this.rb=0; this.plant=CUR;
+    this.bake();
+    const d0=new THREE.Vector3(this.tab[0],this.tab[1],this.tab[2]);
+    this.ref=Math.abs(d0.y)>0.9?new THREE.Vector3(0,0,1):new THREE.Vector3().crossVectors(d0,UP).normalize();
+    const K=MAX_DAY*4; this.Ltab=new Float32Array(K+1);
+    for(let k=0;k<=K;k++)this.Ltab[k]=this.Lfn(k/4);
+    const M=this.M, V=(N+1)*M; this.V=V;
+    if(this.batch){this.batch.reserve(this);this.mesh=null;}
+    else{
+      const g=new THREE.BufferGeometry();
+      this.posAttr=new THREE.BufferAttribute(new Float32Array(V*3),3).setUsage(THREE.DynamicDrawUsage);
+      this.nrmAttr=new THREE.BufferAttribute(new Float32Array(V*3),3).setUsage(THREE.DynamicDrawUsage);
+      const ca=new Float32Array(V*3); for(let v=0;v<V;v++){ca[3*v]=this.col[0];ca[3*v+1]=this.col[1];ca[3*v+2]=this.col[2];}
+      this.colAttr=new THREE.BufferAttribute(ca,3); if(this.blend)this.colAttr.setUsage(THREE.DynamicDrawUsage);
+      g.setAttribute('position',this.posAttr); g.setAttribute('normal',this.nrmAttr); g.setAttribute('color',this.colAttr);
+      const idx=[];
+      for(let i=0;i<N;i++)for(let j=0;j<M;j++){const a=i*M+j,b=i*M+(j+1)%M,c=a+M,d=b+M;idx.push(a,c,b,b,c,d);}
+      g.setIndex(idx);
+      this.PA=this.posAttr.array; this.NA=this.nrmAttr.array; this.CA=ca;
+      this.mesh=new THREE.Mesh(g,this.kind==='root'?CUR.rootMat:CUR.stemMat);
+      this.mesh.frustumCulled=false; this.mesh.castShadow=this.cast; this.mesh.visible=false;
+      CUR.group.add(this.mesh); CUR.disp.push(g);
+    }
+  }
+  bake(){
+    const N=this.N, ds=this.Lfinal/N, p=new THREE.Vector3();
+    if(this.parent)this.parent.finAt(this.parentS,p);else p.copy(this.base0);
+    for(let i=0;i<=N;i++){
+      const d=this.dirFn(i/N,p,i), l=Math.hypot(d.x,d.y,d.z)||1, x=d.x/l,y=d.y/l,z=d.z/l, k=3*i;
+      this.tab[k]=x;this.tab[k+1]=y;this.tab[k+2]=z;
+      this.fin[k]=p.x;this.fin[k+1]=p.y;this.fin[k+2]=p.z;
+      p.x+=x*ds;p.y+=y*ds;p.z+=z*ds;
+    }
+  }
+  finAt(s,out){
+    const N=this.N, f=clamp(s/this.Lfinal)*N, i=Math.min(N-1,Math.floor(f)), w=f-i, a=3*i;
+    out.set(lerp(this.fin[a],this.fin[a+3],w),lerp(this.fin[a+1],this.fin[a+4],w),lerp(this.fin[a+2],this.fin[a+5],w));
+  }
+  posAt(s,out){
+    const N=this.N, f=this.L>0?clamp(s/this.L)*N:0, i=Math.min(N-1,Math.floor(f)), w=f-i, a=3*i, p=this.pos;
+    out.set(lerp(p[a],p[a+3],w),lerp(p[a+1],p[a+4],w),lerp(p[a+2],p[a+5],w)); return out;
+  }
+  tanAt(s,out){
+    const N=this.N, f=this.L>0?clamp(s/this.L)*N:0, i=Math.min(N-1,Math.floor(f)), w=f-i, a=3*i, p=this.tan;
+    out.set(lerp(p[a],p[a+3],w),lerp(p[a+1],p[a+4],w),lerp(p[a+2],p[a+5],w)); return out.normalize();
+  }
+  radiusAt(s){return this.rb*lerp(1,this.tipRatio||0.25,Math.pow(clamp(s/Math.max(this.L,1e-4)),0.7));}
+  phiAt(s){return this.phi0+(this.isMain?this.plant.phiAtS(s):0);}
+  reachDay(s){
+    const T=this.Ltab; if(s<=0)return 0;
+    for(let k=0;k<T.length;k++){
+      if(T[k]>=s){if(k===0)return 0;const a=T[k-1],b=T[k];return (k-1+(s-a)/(b-a))/4;}
+    }
+    return 1e9;
+  }
+  update(day){
+    if(this.removed){this.L=0;if(this.mesh)this.mesh.visible=false;return;}
+    const L=this.Lfn(day); this.L=L;
+    if(L<0.002){if(this.mesh)this.mesh.visible=false;return;}
+    if(this.mesh)this.mesh.visible=true;
+    const N=this.N, M=this.M, ds=L/N, [cs,sn]=ringTrig(M), PL=this.plant;
+    let px,py,pz;
+    if(this.parent){this.parent.posAt(this.parentS,_P);px=_P.x;py=_P.y;pz=_P.z;}else{px=this.base0.x;py=this.base0.y;pz=this.base0.z;}
+    const hook=this.hookFn?this.hookFn(day):0, droop=this.droopFn?this.droopFn(day):0;
+    const aerial=this.kind!=='root'&&this.kind!=='tendril';
+    const wilt=aerial?PL.wilt:0;
+    if(aerial&&this.parent)this.phi0=this.parent.phiAt(this.parentS);
+    const useBend=aerial&&(this.isMain||Math.abs(this.phi0)>1e-4);
+    const clampY=aerial&&this.kind!=='stem'||this.isMain;
+    let rb;
+    if(this.rFactor&&this.parent){rb=Math.max(this.rMin,this.rFactor*this.parent.radiusAt(this.parentS)*(0.3+0.7*clamp(L/0.35)));}
+    else rb=this.radiusFn(day);
+    this.rb=rb;
+    const tab=this.tab, pos=this.pos, tan=this.tan, PA=this.PA, NA=this.NA, CA=this.CA, vo=this.vo;
+    const hl=Math.min(L,0.34), ref=this.ref, Ax=PL.ax, Az=PL.az;
+    let nx=0,ny=0,nz=0;
+    for(let i=0;i<=N;i++){
+      const s=i*ds, sf=Math.min(1,s/this.Lfinal);
+      const f=sf*N, i0=Math.min(N-1,Math.floor(f)), w=f-i0, a=3*i0;
+      let tx=lerp(tab[a],tab[a+3],w), ty=lerp(tab[a+1],tab[a+4],w), tz=lerp(tab[a+2],tab[a+5],w);
+      if(droop)ty-=droop*sf;
+      if(wilt>0.003){const sw=Math.pow(s/Math.max(L,0.3),2)*Math.min(1,L/1.5+0.3)*wilt;ty-=0.55*sw;tx+=PL.wx*0.5*sw;tz+=PL.wz*0.5*sw;}
+      if(hook>0.002){
+        const al=hook*2.75*smooth((s-(L-hl))/hl), c=Math.cos(al), sa=Math.sin(al);
+        const x=tx*c-ty*sa, y=tx*sa+ty*c; tx=x;ty=y;
+      }
+      let tl=Math.hypot(tx,ty,tz)||1; tx/=tl;ty/=tl;tz/=tl;
+      if(useBend){   // rigid bend toward the lean direction: rotate about the horizontal axis (Az..): up -> lean
+        const phi=this.phi0+(this.isMain?PL.phiAtS(s):0);
+        if(Math.abs(phi)>1e-4){
+          const c=Math.cos(phi), sg=Math.sin(phi), dot=Ax*tx+Az*tz;
+          const cx=-Az*ty, cy=Az*tx-Ax*tz, cz=Ax*ty, k1=dot*(1-c);
+          tx=tx*c+cx*sg+Ax*k1; ty=ty*c+cy*sg; tz=tz*c+cz*sg+Az*k1;
+          tl=Math.hypot(tx,ty,tz)||1; tx/=tl;ty/=tl;tz/=tl;
+        }
+      }
+      if(clampY&&py<0.07&&(!this.isMain||s>HYPO))py=0.07;
+      const k=3*i; tan[k]=tx;tan[k+1]=ty;tan[k+2]=tz; pos[k]=px;pos[k+1]=py;pos[k+2]=pz;
+      let d;
+      if(i===0){d=ref.x*tx+ref.y*ty+ref.z*tz;nx=ref.x-tx*d;ny=ref.y-ty*d;nz=ref.z-tz*d;}
+      else{d=nx*tx+ny*ty+nz*tz;nx-=tx*d;ny-=ty*d;nz-=tz*d;}
+      let nl=Math.hypot(nx,ny,nz); if(nl<1e-6){nx=1;ny=0;nz=0;nl=1;} nx/=nl;ny/=nl;nz/=nl;
+      const bx=ty*nz-tz*ny, by=tz*nx-tx*nz, bz=tx*ny-ty*nx;
+      const r=rb*lerp(1,this.tipRatio||0.25,Math.pow(s/L,0.7));
+      let cr,cg,cb;
+      if(this.blend){const t=smooth((py+0.45)/0.75);cr=lerp(C_ROOT[0],C_STEM[0],t);cg=lerp(C_ROOT[1],C_STEM[1],t);cb=lerp(C_ROOT[2],C_STEM[2],t);}
+      for(let j=0;j<M;j++){
+        const dx=nx*cs[j]+bx*sn[j], dy=ny*cs[j]+by*sn[j], dz=nz*cs[j]+bz*sn[j], o=3*(vo+i*M+j);
+        PA[o]=px+dx*r;PA[o+1]=py+dy*r;PA[o+2]=pz+dz*r; NA[o]=dx;NA[o+1]=dy;NA[o+2]=dz;
+        if(this.blend){CA[o]=cr;CA[o+1]=cg;CA[o+2]=cb;}
+      }
+      px+=tx*ds;py+=ty*ds;pz+=tz*ds;
+    }
+    if(this.mesh){this.posAttr.needsUpdate=true;this.nrmAttr.needsUpdate=true;if(this.blend)this.colAttr.needsUpdate=true;}
+    else this.batch.dirty=true;
+  }
+}
+
+/* ---------- organs ---------- */
+const _T=new THREE.Vector3(),_R=new THREE.Vector3(),_Z=new THREE.Vector3(),_basis=new THREE.Matrix4(),_qa=new THREE.Quaternion();
+function frameQuat(axis,s,theta,pitch,out){
+  axis.tanAt(s,_T);
+  const ref=axis.ref;
+  _R.copy(ref).addScaledVector(_T,-ref.dot(_T));
+  if(_R.lengthSq()<1e-6)_R.set(1,0,0).addScaledVector(_T,-_T.x);
+  _R.normalize();
+  _qa.setFromAxisAngle(_T,theta); _R.applyQuaternion(_qa);
+  _Z.crossVectors(_R,_T);
+  _basis.makeBasis(_R,_T,_Z);
+  out.setFromRotationMatrix(_basis);
+  _qa.setFromAxisAngle(ZAXIS,pitch); out.multiply(_qa);
+}
+const FALL_DAYS=3.2, _qL=new THREE.Quaternion(), _qf=new THREE.Quaternion(), _eu=new THREE.Euler();
+class Leaf{
+  constructor(o){
+    Object.assign(this,{cot:false,size:1,dur:16,pitchM:0.3,droopy:1,life:1e9,phase:0,yawL:0,dx:0,dz:0,rollL:0,frac:0.5,removed:false,gone:false,sen:0,offset:0,dropAt:null,dropClock:0},o);
+    this.plant=CUR;
+    this.birth=this.cot?12.8:this.axis.reachDay(this.s);
+    this.mesh=null; this.attached=false;
+  }
+  build(){
+    const P=this.plant;
+    const geo=this.cot?cotGeo:buildLeafGeometry(rng(this.gseed));
+    this.mat=new THREE.MeshStandardMaterial({vertexColors:true,side:THREE.DoubleSide,roughness:.6,morphTargets:true,map:leafTex.map,bumpMap:leafTex.bump,bumpScale:1.4});
+    this.mesh=new THREE.Mesh(geo,this.mat);
+    this.mesh.frustumCulled=false; this.mesh.castShadow=true; this.mesh.receiveShadow=true; this.mesh.visible=false;
+    this.mesh.userData.owner=this;
+    P.group.add(this.mesh); P.disp.push(this.mat); if(!this.cot)P.disp.push(geo);
+  }
+  update(age,time){
+    const P=this.plant, ax=this.axis;
+    this.attached=false;
+    if(this.removed){this.gone=true;if(this.mesh)this.mesh.visible=false;return;}
+    if(age<this.birth||ax.L<0.002){if(this.mesh)this.mesh.visible=false;return;}
+    if(!this.mesh)this.build();
+    const m=this.mesh;
+    let s=this.s;
+    if(this.cot)s=Math.min(ax.L,HYPO);else if(s>ax.L+1e-4){m.visible=false;return;}
+    let dropped=this.dropAt!==null;
+    if(!dropped&&age-this.birth+this.offset>=this.life){this.dropAt=age;this.dropClock=clock;dropped=true;}
+    const ea=dropped?this.life:age-this.birth+this.offset;
+    let sc,pitch,fold,theta=this.theta;
+    if(this.cot){
+      const de=ea+this.birth, open=smooth((de-14)/6.5);
+      sc=(0.28+0.72*smooth((de-14)/6))*smooth((de-this.birth)/1.2); pitch=lerp(1.5,0.2,open); fold=1-open;
+    }else{
+      const u=clamp(ea/this.dur), e=smooth(u);
+      sc=this.size*(0.05+0.95*Math.pow(e,0.85));
+      pitch=lerp(1.35,this.pitchM,smooth(u*1.15));
+      fold=1-smooth((u-0.1)/0.75);
+      pitch-=0.25*smooth((ea-this.dur)/70)*this.droopy;
+      if(!dropped){
+        theta+=Math.sin(time*0.8+this.phase)*0.035*e;
+        pitch+=Math.sin(time*1.3+this.phase*1.7)*0.03*e;
+      }
+    }
+    const sen=Math.max(smooth((ea-(this.life-30))/26),dropped?1:P.brown); this.sen=sen;
+    pitch-=0.5*sen; sc*=1-0.12*sen;
+    if(!dropped){
+      const w=P.wilt;
+      pitch-=w*(this.cot?0.25:0.8); fold=Math.max(fold,0.55*w*(this.cot?0.3:1)); sc*=1-0.1*w;
+    }
+    let dark=0;
+    frameQuat(ax,s,theta,pitch,m.quaternion);
+    ax.posAt(s,m.position);
+    if(this.rollL){_qa.setFromAxisAngle(XAXIS,this.rollL);m.quaternion.multiply(_qa);}
+    if(dropped){
+      const since=clock-this.dropClock, fp=clamp(since/FALL_DAYS), t2=since-FALL_DAYS;
+      const lay=smooth(t2/22), decomp=smooth(t2/50);
+      if(t2>52){this.removed=true;m.visible=false;return;}   // fully biodegraded
+      dark=lay; sc*=1-0.97*decomp;
+      fold=lerp(lerp(fold,0.6,smooth(fp)),0.95,decomp*0.8);
+      _eu.set(0.05,this.yawL,-0.04); _qL.setFromEuler(_eu);
+      const flutter=Math.sin(fp*16+this.phase)*0.55*(1-fp)*Math.sin(Math.PI*fp);
+      _qf.setFromAxisAngle(ZAXIS,flutter);
+      m.quaternion.multiply(_qf).slerp(_qL,smooth(fp));
+      const restY=groundY(m.position.x+this.dx+P.x,m.position.z+this.dz+P.z)+0.05+0.26*sc, h=Math.max(0,m.position.y-restY), sp=smooth(fp);
+      m.position.set(m.position.x+this.dx*sp,m.position.y-h*fp*fp-0.05*decomp,m.position.z+this.dz*sp);
+    }else this.attached=true;
+    m.visible=true;
+    m.morphTargetInfluences[0]=fold;
+    m.scale.setScalar(Math.max(sc,0.001));
+    let r,g,b;
+    if(sen<0.55){const t=sen/0.55;r=lerp(1,1.9,t);g=lerp(1,1.35,t);b=lerp(1,0.35,t);}
+    else{const t=(sen-0.55)/0.45;r=lerp(1.9,2.3,t);g=lerp(1.35,0.75,t);b=lerp(0.35,0.6,t);}
+    const k=(1-0.45*dark)*1.15; this.mat.color.setRGB(r*k,g*k,b*k);
+  }
+}
+const FRUIT_STOPS=[[0,[0.3,0.52,0.14]],[0.25,[0.58,0.7,0.25]],[0.6,[0.95,0.45,0.1]],[1,[0.8,0.07,0.06]]];
+function fruitColor(rp,out){
+  for(let i=1;i<FRUIT_STOPS.length;i++){
+    if(rp<=FRUIT_STOPS[i][0]){
+      const a=FRUIT_STOPS[i-1],b=FRUIT_STOPS[i],t=(rp-a[0])/(b[0]-a[0]);
+      return out.setRGB(lerp(a[1][0],b[1][0],t),lerp(a[1][1],b[1][1],t),lerp(a[1][2],b[1][2],t));
+    }
+  }
+  const l=FRUIT_STOPS[FRUIT_STOPS.length-1][1]; return out.setRGB(l[0],l[1],l[2]);
+}
+const _dir=new THREE.Vector3(),_end=new THREE.Vector3(),_ctr=new THREE.Vector3();
+class Blossom{
+  constructor(o){
+    Object.assign(this,o);
+    this.plant=CUR;
+    this.ped=new THREE.Mesh(pedGeo,pedMat);
+    this.flower=new THREE.Mesh(flowerGeo,new THREE.MeshStandardMaterial({vertexColors:true,side:THREE.DoubleSide,roughness:.6,morphTargets:true}));
+    this.fruitMat=new THREE.MeshStandardMaterial({color:0x4d8423,roughness:.28});
+    this.calyxMat=calyxMat.clone();
+    this.fruit=new THREE.Mesh(fruitGeo,this.fruitMat);
+    this.calyx=new THREE.Mesh(calyxGeo,this.calyxMat);
+    for(const m of [this.ped,this.flower,this.fruit,this.calyx]){m.frustumCulled=false;m.visible=false;m.castShadow=true;m.receiveShadow=true;CUR.group.add(m);}
+    this.ped.receiveShadow=false;
+    CUR.disp.push(this.flower.material,this.fruitMat,this.calyxMat);
+    this.fruit.userData.owner=this; this.removed=false; this.gone=false;
+    this.fruitVisible=false; this.ripe=false; this.rot=0;
+    this.ripeClock=null; this.fallClock=null; this.fallRipe=false; this.rotted=false; this.spawned=false;
+    this.hold=9+7*Math.random(); this.start=new THREE.Vector3(); this.dx=(Math.random()-0.5)*0.7; this.dz=(Math.random()-0.5)*0.7;
+  }
+  /* pedicel end point (_end) and its direction (_dir) on a given plant age */
+  calc(day){
+    const tr=this.truss;
+    tr.posAt(this.s,_ctr); tr.tanAt(this.s,_T);
+    const hl=Math.hypot(_T.x,_T.z)||1, c=Math.cos(this.az), sa=Math.sin(this.az);
+    const ox=(_T.x*c-_T.z*sa)/hl, oz=(_T.x*sa+_T.z*c)/hl;
+    const w=smooth((day-this.d0)/25), hv=0.8*(1-w)+0.55*w;
+    _dir.set(ox*hv,0.3*(1-w)-(0.5+0.5*w),oz*hv).normalize();
+    const pedLen=lerp(0.05,0.3,smooth((day-(this.d0-9))/12))*this.sv;
+    _end.copy(_ctr).addScaledVector(_dir,pedLen);
+    return pedLen;
+  }
+  centerAt(day,out){this.calc(day);return out.set(_end.x,_end.y-this.R*0.78,_end.z);}
+  update(day){
+    const P=this.plant, tr=this.truss, tb=this.d0-9, brown=P.brown;
+    this.gone=this.removed; this.fruitVisible=false; this.ripe=false;
+    const show=day>=tb&&tr.L>=this.s&&tr.mesh.visible;
+    if(!show){this.ped.visible=this.flower.visible=this.fruit.visible=this.calyx.visible=false;return;}
+    const pedLen=this.calc(day);
+    this.ped.visible=true; this.ped.position.copy(_ctr); this.ped.quaternion.setFromUnitVectors(UP,_dir);
+    this.ped.scale.set(0.009,pedLen,0.009);
+    if(day<this.d0+11&&brown<0.5){
+      const grow=lerp(0.3,1,smooth((day-tb)/10))*(1-smooth((day-(this.d0+7))/4));
+      this.flower.visible=true; this.flower.position.copy(_end); this.flower.quaternion.setFromUnitVectors(UP,_dir);
+      this.flower.scale.setScalar(Math.max(0.001,grow)*this.sv*0.75);
+      this.flower.morphTargetInfluences[0]=1-smooth((day-(this.d0-3))/6);
+    }else this.flower.visible=false;
+    const f0=this.d0+4;
+    if(day<f0||this.gone||this.rotted){this.fruit.visible=this.calyx.visible=false;return;}
+    const u=clamp((day-f0)/22), g=1-Math.pow(1-u,2);
+    const r=this.R*(0.06+0.94*g), rp=clamp((day-(this.d0+26))/16), full=rp>0.98;
+    let sk=1;
+    fruitColor(rp,this.fruitMat.color);
+    if(this.fallClock===null){
+      this.fruit.position.set(_end.x,_end.y-r*0.78,_end.z);
+      if(full&&this.ripeClock===null)this.ripeClock=clock;
+      if(brown>0.7||(this.ripeClock!==null&&clock-this.ripeClock>this.hold)){
+        this.fallClock=clock; this.fallRipe=full; this.start.copy(this.fruit.position); this.fr=r;
+      }
+    }
+    if(this.fallClock!==null){   // dropped: falls, lies on the soil, rots away
+      const since=clock-this.fallClock, fp=clamp(since/1.0), t=since-1;
+      this.rot=smooth(t/16); sk=1-0.55*smooth((t-14)/22);
+      const rr=this.fr*sk, wx=P.x+this.start.x+this.dx, wz=P.z+this.start.z+this.dz;
+      const rest=groundY(wx,wz)+rr*this.sq*0.86;
+      const x=this.start.x+this.dx*smooth(fp), z=this.start.z+this.dz*smooth(fp);
+      const y=fp<1?this.start.y-(this.start.y-rest)*fp*fp:rest;
+      this.fruit.position.set(x,y,z);
+      this.fruit.scale.set(rr,rr*this.sq,rr);
+      this.fruitMat.color.r=lerp(this.fruitMat.color.r,0.2,this.rot);this.fruitMat.color.g=lerp(this.fruitMat.color.g,0.1,this.rot);this.fruitMat.color.b=lerp(this.fruitMat.color.b,0.06,this.rot);
+      this.calyx.position.set(x,y+0.78*rr,z); this.calyx.scale.setScalar(rr);
+      this.calyxMat.color.setRGB(lerp(1,1.8,this.rot),lerp(1,0.7,this.rot),lerp(1,0.5,this.rot));
+      this.fruit.visible=this.calyx.visible=true;
+      this.fruitVisible=true; this.ripe=this.fallRipe;
+      if(t>38){
+        this.rotted=true; this.fruit.visible=this.calyx.visible=false; this.fruitVisible=false;
+        if(this.fallRipe&&!this.spawned&&!this.removed){this.spawned=true;pendingSpawns.push({x:wx,z:wz});}
+      }
+      return;
+    }
+    if(brown>0){   // a dead plant's fruit shrivels
+      this.fruitMat.color.r=lerp(this.fruitMat.color.r,0.24,brown);this.fruitMat.color.g=lerp(this.fruitMat.color.g,0.12,brown);this.fruitMat.color.b=lerp(this.fruitMat.color.b,0.06,brown);
+      sk=1-0.25*brown;
+    }
+    this.calyxMat.color.setRGB(lerp(1,1.8,brown),lerp(1,0.7,brown),lerp(1,0.5,brown));
+    this.fruitVisible=true; this.ripe=full;
+    this.fruit.visible=true; this.calyx.visible=true;
+    this.fruit.position.set(_end.x,_end.y-r*sk*0.78,_end.z);
+    this.fruit.scale.set(r*sk,r*sk*this.sq,r*sk);
+    this.calyx.position.copy(_end); this.calyx.scale.setScalar(r*sk);
+  }
+}
+
+/* ---------- plant generation ---------- */
+const NODES=23, nodeS=k=>0.93+k*0.49;
+function buildPlant(P){
+  CUR=P; const seed=P.seed, axes=P.axes, leaves=P.leaves, blossoms=P.blossoms; let mainAxis;
+  const r=rng(seed), tmp=new THREE.Vector3();
+  const LF1=HYPO, LFM=12.13;
+  const stemR=d=>0.012+0.085*smooth((d-12)/75);   // main stem and taproot share this, so they join at one width
+  const rootBase=new THREE.Vector3(SEED_POS.x,SEED_POS.y,0);
+  /* main stem */
+  const ph=r()*6, ph2=r()*6, leanA=r()*TAU, leanAmt=0.05+0.05*r();
+  mainAxis=new Axis({
+    kind:'stem',isMain:true,N:96,M:8,Lfinal:LFM,tipRatio:0.2,blend:true,
+    base0:rootBase,
+    Lfn:d=>d<5?0:d<12?LF1*smooth((d-5)/7):d<13?LF1:LF1+(LFM-LF1)*smooth((d-13)/79),
+    radiusFn:stemR,
+    hookFn:d=>d<10?1:1-smooth((d-10)/4.5),
+    dirFn:(sf)=>{const s=sf*LFM;if(s<LF1)return tmp.set(0,1,0);const z=s-LF1;
+      return tmp.set(Math.sin(z*1.7+ph)*0.08+Math.sin(z*12.57)*0.045+Math.cos(leanA)*leanAmt*0.5,1,Math.sin(z*1.3+ph2)*0.08+Math.cos(z*12.57+1)*0.045+Math.sin(leanA)*leanAmt*0.5);}
+  });
+  axes.push(mainAxis); P.main=mainAxis;
+  const leafOff=r()*TAU, thetaOf=k=>k*2.5133+leafOff;
+  /* cotyledons: they yellow and drop first */
+  for(const th of [Math.PI/2,Math.PI*1.5])leaves.push(new Leaf({axis:mainAxis,s:LF1,theta:th,cot:true,geo:cotGeo,phase:r()*6,life:62,yawL:r()*TAU,dx:(r()-0.5)*0.6,dz:(r()-0.5)*0.6}));
+  const fallers=()=>({yawL:r()*TAU,dx:(r()-0.5)*1.1,dz:(r()-0.5)*1.1,rollL:(r()-0.5)*0.7});
+  /* true leaves on the main stem; the lowest ones age, yellow and drop */
+  for(let k=0;k<NODES;k++){
+    const size=(k<6?0.55+0.07*k:0.97-0.25*smooth((k-16)/7))*(0.8+0.4*r());
+    leaves.push(new Leaf(Object.assign({axis:mainAxis,s:nodeS(k),theta:thetaOf(k)+0.5*(r()-0.5),size,dur:14+6*size,gseed:Math.floor(r()*4e9),frac:k/22,
+      pitchM:lerp(-0.3,0.55,k/22)+r()*0.3-0.15,droopy:k<10?1.2:0.6,life:k<=13?52+3*k:1e9,phase:r()*6},fallers())));
+  }
+  /* trusses (cherry tomato clusters) */
+  const addTruss=(parent,sK,th,Lf,n,R,ti,reach)=>{
+    if(reach+14>MAX_DAY-12)return;
+    const ox=Math.sin(th), oz=Math.cos(th), px=Math.cos(th), pz=-Math.sin(th), pphase=r()*6;
+    const truss=new Axis({kind:'truss',parent,parentS:sK,N:22,M:5,Lfinal:Lf,col:C_TRUSS,tipRatio:0.6,rFactor:0.3,rMin:0.012,
+      Lfn:d=>Lf*smooth((d-(reach+3))/18),
+      droopFn:d=>1.1*smooth((d-(reach+20))/40),
+      dirFn:(sf)=>{const sw=0.25*Math.sin(sf*9+pphase);return tmp.set(ox+px*sw,0.6-0.9*sf,oz+pz*sw);}});
+    axes.push(truss);
+    for(let j=0;j<n;j++){
+      const side=j%2?1:-1;
+      blossoms.push(new Blossom({truss,s:Lf*(0.22+0.78*j/(n-1)),d0:reach+14+j*1.5,R:(0.145-0.003*ti)*(0.93+0.14*r()),
+        az:side*(0.8+0.7*r()),sv:0.9+0.4*r(),sq:0.94+0.06*r()}));
+    }
+  };
+  [6,8,10,12,14,16,18,20].forEach((k,ti)=>{
+    const sK=nodeS(k);
+    addTruss(mainAxis,sK,thetaOf(k)+Math.PI+(r()-0.5)*0.4,2.1-0.04*ti,6+Math.floor(r()*3),0,ti,mainAxis.reachDay(sK));
+  });
+  /* branching: side shoots with their own leaves, sub-branches and clusters */
+  const addShoot=(parent,sK,th,Lf,birth,depth)=>{
+    const ox=Math.sin(th), oz=Math.cos(th), wob=r()*6;
+    const shoot=new Axis({kind:'shoot',parent,parentS:sK,N:40,M:6,Lfinal:Lf,col:C_STEM,rFactor:0.5,rMin:0.012,tipRatio:0.2,
+      Lfn:d=>Lf*smooth((d-birth)/50),
+      dirFn:(sf)=>{const o=1-0.85*smooth(sf*1.4);return tmp.set(ox*o*0.9+Math.sin(sf*5+wob)*0.08,0.35+1.2*smooth(sf),oz*o*0.9+Math.cos(sf*4+wob)*0.08);}});
+    axes.push(shoot);
+    const n=Math.max(2,Math.floor(Lf/0.46)), subAt=depth===0&&Lf>2.4?Math.floor(n*(0.35+0.2*r())):-1;
+    for(let m=0;m<n;m++){
+      const sz=(0.42+0.26*Math.sin(Math.PI*(m+0.8)/(n+0.6)))*(0.78+0.45*r())*(depth?0.8:1);
+      leaves.push(new Leaf(Object.assign({axis:shoot,s:0.26+m*0.46,theta:m*2.5133+r(),size:sz,dur:13,gseed:Math.floor(r()*4e9),frac:0.5,
+        pitchM:0.3+r()*0.2,droopy:0.8,life:m<n*0.4?58+6*m:1e9,phase:r()*6},fallers())));
+    }
+    if(subAt>=0){
+      const sS=0.26+subAt*0.46+0.1;
+      addShoot(shoot,sS,th+2.2,1.3+0.9*r(),shoot.reachDay(sS)+6,1);
+    }
+    if(depth===0&&Lf>2.2){
+      const m=Math.floor(n*0.55), sS=0.26+m*0.46+0.22;
+      addTruss(shoot,sS,th+Math.PI*0.8,1.3,4,0,3,shoot.reachDay(sS));
+    }
+  };
+  for(const k of [3,5,7,9,11,13,15]){
+    if(r()<0.1)continue;
+    const sK=nodeS(k);
+    addShoot(mainAxis,sK,thetaOf(k)+0.9,(3+2.4*r())*(1-k/26),mainAxis.reachDay(sK)+8,0);
+  }
+  /* roots: taproot, adventitious roots from the stem base, then three orders of laterals */
+  const steer=(v,p)=>{
+    const wx=p.x+P.x, wz=p.z+P.z;
+    if(wx>HX-0.5)v.x-=(wx-HX+0.5)*6; else if(wx<-HX+0.5)v.x+=(-HX+0.5-wx)*6;
+    if(wz>HZ-0.5)v.z-=(wz-HZ+0.5)*6; else if(wz<-HZ+0.5)v.z+=(-HZ+0.5-wz)*6;
+    if(p.y<-2.9)v.y*=clamp((-3.1-p.y)/0.2);
+    if(p.y>-0.05)v.y-=1.5;
+    return v;
+  };
+  const ra=r()*6, rb2=r()*6, TAPL=2.9, rbatch=new Batch(P.rootMat); P.rootBatch=rbatch;
+  const tap=new Axis({kind:'root',batch:rbatch,N:56,M:6,Lfinal:TAPL,col:C_ROOT,cast:false,tipRatio:0.12,blend:true,
+    base0:rootBase,
+    Lfn:d=>TAPL*(1-Math.pow(1-clamp((d-4)/60),2.2)), radiusFn:stemR,
+    dirFn:(sf,p)=>steer(tmp.set(Math.sin(sf*5+ra)*0.18,-1,Math.cos(sf*4+rb2)*0.18),p)});
+  axes.push(tap);
+  const rootAxis=(parent,sP,Lf,birth,dur,out,wob,N,fac)=>{
+    const a=new Axis({kind:'root',batch:rbatch,parent,parentS:sP,N,M:5,Lfinal:Lf,col:C_ROOT,cast:false,tipRatio:0.15,rFactor:fac,rMin:0.0035,
+      Lfn:d=>Lf*smooth((d-birth)/dur),
+      dirFn:(sf,p)=>steer(tmp.set(Math.cos(out)*1+Math.sin(sf*7+wob)*0.2,-(0.3+1.1*sf),Math.sin(out)*1+Math.cos(sf*6+wob)*0.2),p)});
+    axes.push(a); return a;
+  };
+  for(let q=0;q<8;q++){   // adventitious roots from below the soil line
+    const sA=0.01+0.09*r(), Lf=1.8+1.6*r();
+    rootAxis(mainAxis,sA,Lf,24+r()*16,34,r()*TAU,r()*6,24,0.45);
+  }
+  for(let q=0;q<30;q++){
+    const sT=0.3+q*(2.4/29), Lf=(0.9+1.8*(1-sT/2.9))*(0.6+0.7*r()), birth=tap.reachDay(sT)+2, out=r()*TAU;
+    const lat=rootAxis(tap,sT,Lf,birth,28,out,r()*6,20,0.42);
+    const ns=2+Math.floor(r()*2);
+    for(let a=0;a<ns;a++){
+      const sS=Lf*(0.2+0.7*r()), L2=0.35+0.7*r();
+      const sub=rootAxis(lat,sS,L2,lat.reachDay(sS)+2,20,r()*TAU,r()*6,12,0.5);
+      if(r()<0.6){const s3=L2*(0.3+0.6*r());rootAxis(sub,s3,0.15+0.3*r(),sub.reachDay(s3)+2,14,r()*TAU,r()*6,7,0.5);}
+    }
+  }
+  rbatch.finalize(P);
+  relaxFruit(P);
+}
+/* Re-roll any cherry tomato whose final position touches another until none overlap. */
+function relaxFruit(P){
+  const axes=P.axes, blossoms=P.blossoms;
+  for(const a of axes)if(a.kind!=='root')a.update(MAX_DAY);
+  const rr=rng(P.seed+99), C=blossoms.map(()=>new THREE.Vector3());
+  for(let it=0;it<150;it++){
+    blossoms.forEach((b,i)=>b.centerAt(MAX_DAY,C[i]));
+    let bad=0;
+    for(let i=0;i<blossoms.length;i++)for(let j=i+1;j<blossoms.length;j++){
+      if(C[i].distanceTo(C[j])<(blossoms[i].R+blossoms[j].R)*1.2){
+        bad++; const b=blossoms[j];
+        b.az=(rr()<0.5?-1:1)*(0.5+1.1*rr()); b.sv=0.85+0.7*rr();
+      }
+    }
+    if(!bad)break;
+  }
+  for(const a of axes)if(a.kind!=='root')a.update(0);
+}
+
+/* ---------- garden state: moisture field, plants, trellises ---------- */
+const MAXP=10, MIN_GAP=1.3, MAXT=8, TRELLIS_W=1.6, TRELLIS_H=13, TIE_Y0=1.0, TIE_DY=1.6;
+const BASE_RATE=0.25;   // garden days per real second at 1x
+let autoWater=false, harvested=0, harvestedRipe=0, plants=[], trellises=[], plantCounter=0, speed=1, tool='seed', trellisSpin=0;
+const GNX=64, GNZ=32, CELL=2*HX/GNX, field=new Float32Array(GNX*GNZ), fieldTmp=new Float32Array(GNX*GNZ);
+const MOIST_MAX=1.3;
+function sampleField(x,z){
+  const gx=clamp((x+HX)/CELL-0.5,0,GNX-1.001), gz=clamp((z+HZ)/CELL-0.5,0,GNZ-1.001);
+  const i=Math.floor(gx), j=Math.floor(gz), fx=gx-i, fz=gz-j;
+  const a=field[j*GNX+i], b=field[j*GNX+i+1], c=field[(j+1)*GNX+i], d=field[(j+1)*GNX+i+1];
+  return lerp(lerp(a,b,fx),lerp(c,d,fx),fz);
+}
+function addWater(x,z,R,amt){
+  const i0=Math.max(0,Math.floor((x-R+HX)/CELL)), i1=Math.min(GNX-1,Math.ceil((x+R+HX)/CELL));
+  const j0=Math.max(0,Math.floor((z-R+HZ)/CELL)), j1=Math.min(GNZ-1,Math.ceil((z+R+HZ)/CELL));
+  for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){
+    const cx=(i+0.5)*CELL-HX, cz=(j+0.5)*CELL-HZ, d=Math.hypot(cx-x,cz-z);
+    if(d>=R)continue;
+    const w=1-d/R, k=j*GNX+i;
+    field[k]=clamp(field[k]+amt*w*w*(3-2*w),0,MOIST_MAX);
+  }
+}
+function stepField(dt){   // dt in garden days
+  const k=Math.min(0.4,1.2*dt);
+  for(let j=0;j<GNZ;j++)for(let i=0;i<GNX;i++){
+    const c=j*GNX+i, m=field[c];
+    const n=(field[j*GNX+Math.max(0,i-1)]+field[j*GNX+Math.min(GNX-1,i+1)]+field[Math.max(0,j-1)*GNX+i]+field[Math.min(GNZ-1,j+1)*GNX+i])*0.25;
+    const v=m+k*(n-m), rate=0.015+(v>0.95?0.06:0)+(v>1.05?0.12:0);
+    fieldTmp[c]=Math.max(0,v-rate*dt);
+  }
+  field.set(fieldTmp);
+}
+function updateSoilColors(){
+  const col=soilGeo.attributes.color, pos=soilGeo.attributes.position;
+  for(let i=0;i<pos.count;i++){
+    const m=sampleField(pos.getX(i),-pos.getY(i)), k=lerp(1.4,0.5,smooth(clamp(m))), w=clamp((m-1)/0.3);
+    col.setXYZ(i,k*(1-0.15*w),k*(1-0.05*w),k*(1+0.12*w));
+  }
+  col.needsUpdate=true;
+}
+
+/* ---------- trellis: two poles and cross ties, placed by the player ---------- */
+const poleMat=new THREE.MeshStandardMaterial({map:bambooTex,roughness:.7}), twineMat=new THREE.MeshStandardMaterial({color:0xe9e3d0,roughness:.9});
+function buildTrellisMeshes(h,ghost){
+  const g=new THREE.Group(), meshes=[];
+  const pm=ghost?ghostTrellisMat:poleMat, tm=ghost?ghostTrellisMat:twineMat;
+  for(const x of [-TRELLIS_W/2,TRELLIS_W/2]){
+    const p=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.05,h+0.6,8),pm); p.position.set(x,h/2-0.3,0); p.castShadow=!ghost; g.add(p); meshes.push(p);
+  }
+  for(let y=TIE_Y0;y<h;y+=TIE_DY){
+    const t=new THREE.Mesh(new THREE.CylinderGeometry(0.012,0.012,TRELLIS_W,5),tm); t.rotation.z=Math.PI/2; t.position.set(0,y,0); g.add(t); meshes.push(t);
+  }
+  return {g,meshes};
+}
+const ghostTrellisMat=new THREE.MeshStandardMaterial({color:0xdcc088,transparent:true,opacity:0.55,roughness:.8});
+class Trellis{
+  constructor(x,z,ang){
+    this.x=x;this.z=z;this.ang=ang;
+    const {g,meshes}=buildTrellisMeshes(TRELLIS_H,false);
+    this.group=g; g.position.set(x,0,z); g.rotation.y=ang; scene.add(g);
+    for(const m of meshes)m.userData.owner=this;
+    this.meshes=meshes;
+    const c=Math.cos(ang), s=Math.sin(ang), h=TRELLIS_W/2;
+    this.poles=[{x:x+c*h,z:z-s*h},{x:x-c*h,z:z+s*h}];
+  }
+  local(px,pz){const dx=px-this.x,dz=pz-this.z,c=Math.cos(this.ang),s=Math.sin(this.ang);return {lx:dx*c-dz*s,lz:dx*s+dz*c};}
+  supports(px,pz){const l=this.local(px,pz);return Math.abs(l.lx)<=TRELLIS_W/2+0.4&&Math.abs(l.lz)<=1.3;}
+  dispose(){scene.remove(this.group);this.group.traverse(o=>{if(o.geometry)o.geometry.dispose();});}
+}
+function refreshSupport(){
+  for(const P of plants){
+    if(P.dead){continue;}
+    let best=null,bd=1e9;
+    for(const T of trellises){if(T.supports(P.x,P.z)){const d=Math.abs(T.local(P.x,P.z).lz);if(d<bd){bd=d;best=T;}}}
+    if(best!==P.trellis){
+      if(P.trellis)P.detachTendrils(P.trellis);
+      P.trellis=best;
+      if(best)P.growTendrils(best);
+    }
+  }
+}
+
+/* A tendril leaves a node, reaches for the nearest pole, then coils around it. */
+function planTendril(p0,Lf,N,cx,cz,sign){
+  const ds=Lf/N, rc=0.0555, p=p0.clone();
+  const ax=p.x-cx, az=p.z-cz, al=Math.hypot(ax,az)||1;
+  const tgt=new THREE.Vector3(cx+ax/al*rc,p.y+0.12,cz+az/al*rc);
+  const t=new THREE.Vector3(cx-p.x,0.2,cz-p.z).normalize(), d=new THREE.Vector3(), tans=[], alpha=0.32;
+  let phase=0, phi=0, yp=0;
+  for(let i=0;i<=N;i++){
+    if(phase===0){
+      d.copy(tgt).sub(p);
+      if(d.length()<0.03||i>N*0.55){phase=1;phi=Math.atan2(p.z-cz,p.x-cx);yp=p.y;}
+      else{d.normalize();t.lerp(d,0.2).normalize();tans.push(t.clone());p.addScaledVector(t,ds);continue;}
+    }
+    phi+=sign*ds*Math.cos(alpha)/rc; yp+=ds*Math.sin(alpha);
+    d.set(cx+Math.cos(phi)*rc,yp,cz+Math.sin(phi)*rc).sub(p).normalize();
+    tans.push(d.clone()); p.addScaledVector(d,ds);
+  }
+  return tans;
+}
+
+/* ---------- Plant: one tomato with its own age, water, health, weight ---------- */
+const MAX_AGE=MAX_DAY, DSB=0.5, NB=Math.ceil((12.13-HYPO)/DSB), K_BEND=2e5, ECC=0.07;
+class Plant{
+  constructor(x,z){
+    this.id=++plantCounter; this.x=x; this.z=z; this.seed=Math.floor(Math.random()*9e8);
+    this.group=new THREE.Group(); this.group.position.set(x,0,z); scene.add(this.group);
+    this.disp=[]; this.axes=[]; this.leaves=[]; this.blossoms=[]; this.aerial=[]; this.tendrils=[]; this.main=null; this.trellis=null;
+    this.stemMat=tubeMat.clone(); this.rootMat=tubeMat.clone(); this.disp.push(this.stemMat,this.rootMat);
+    this.age=0; this.health=1; this.stress=0; this.wilt=0; this.vigor=0; this.moisture=0; this.rate=0; this.brown=0;
+    this.dead=false; this.doomed=false; this.support=0; this.dormant=true; this.deadAttached=0; this.H=0; this.lastAge=-1; this.lastWilt=-1; this.lastBend=0; this.lean=0;
+    const a=Math.random()*TAU; this.wx=Math.cos(a); this.wz=Math.sin(a); this.ax=this.wz; this.az=-this.wx;
+    this.theta=new Float32Array(NB); this.phiCum=new Float32Array(NB+1); this.massBins=new Float32Array(NB);
+    this.xs=new Float32Array(NB+1); this.xm=new Float32Array(NB);
+    buildPlant(this);
+    this.aerial=this.axes.filter(a=>a.kind!=='root'&&a.kind!=='tendril');
+    this.seedMat=new THREE.MeshStandardMaterial({color:0xdcc088,roughness:.8,transparent:true});
+    this.seedMesh=new THREE.Mesh(new THREE.SphereGeometry(1,20,14),this.seedMat);
+    this.seedMesh.position.set(0,-0.03,0); this.seedMesh.rotation.y=Math.random()*TAU; this.group.add(this.seedMesh);
+    this.mound=new THREE.Mesh(moundGeo,moundMat); this.mound.position.set(0.02,groundY(x,z)-0.01,0); this.mound.castShadow=true; this.mound.receiveShadow=true; this.group.add(this.mound);
+    this.disp.push(this.seedMat);
+    this.sampleMoisture();
+  }
+  phiAtS(s){
+    const b=(s-HYPO)/DSB; if(b<=0)return 0;
+    if(b>=NB)return this.phiCum[NB];
+    const bi=Math.floor(b); return this.phiCum[bi]+this.theta[bi]*(b-bi);
+  }
+  rootRadius(){return 0.35+0.5*smooth(this.age/40);}
+  sampleMoisture(){
+    const rr=this.rootRadius(), x=this.x, z=this.z;
+    this.moisture=(sampleField(x,z)*2+sampleField(x+rr,z)+sampleField(x-rr,z)+sampleField(x,z+rr)+sampleField(x,z-rr))/6;
+    return this.moisture;
+  }
+  ageLeaves(dt,rate){
+    for(const l of this.leaves){
+      if(l.removed||l.dropAt!==null||this.age<l.birth)continue;
+      l.offset+=dt*rate*(1.35-l.frac);
+    }
+  }
+  mainAttach(a){let x=a;while(x.parent&&x.parent!==this.main)x=x.parent;return x.parentS;}
+  /* Static cantilever: weight above each stem section bends it sideways unless a trellis ties it. */
+  physics(dt){
+    const m0=this.main; if(m0.L<1)return;
+    const mass=this.massBins, bin=s=>clamp(Math.floor((s-HYPO)/DSB),0,NB-1); mass.fill(0);
+    let active=0;
+    for(let b=0;b<NB;b++){
+      const s0=HYPO+b*DSB; if(s0>=m0.L)break; active=b+1;
+      const len=Math.min(DSB,m0.L-s0), r=m0.radiusAt(s0+len/2); mass[b]+=len*r*r*60;
+    }
+    for(const a of this.aerial){if(a===m0||a.removed||a.L<0.01)continue;mass[bin(this.mainAttach(a))]+=a.L*0.12;}
+    for(const l of this.leaves){if(!l.attached||l.axis.kind==='root')continue;const sc=l.mesh.scale.x;mass[bin(l.axis===m0?l.s:this.mainAttach(l.axis))]+=0.55*sc*sc;}
+    for(const b of this.blossoms){if(!b.fruitVisible||b.fallClock!==null)continue;const r=b.fruit.scale.x;mass[bin(this.mainAttach(b.truss))]+=260*r*r*r;}
+    const th=this.theta, cum=this.phiCum, xs=this.xs, xm=this.xm;
+    cum[0]=0; xs[0]=0;
+    for(let b=0;b<NB;b++){cum[b+1]=cum[b]+th[b];const pm=cum[b]+th[b]*0.5;xm[b]=xs[b]+0.5*DSB*Math.sin(pm);xs[b+1]=xs[b]+DSB*Math.sin(pm);}
+    let held=0; for(const a of this.tendrils)if(a.L>=a.Lfinal*0.95)held++;
+    this.support=this.trellis?clamp(held/4):0;
+    const tied=this.support>0.25;
+    for(let b=0;b<active;b++){
+      const sb=HYPO+b*DSB;
+      let end=active-1;
+      if(tied){const nt=Math.ceil((sb+0.05-TIE_Y0)/TIE_DY)*TIE_DY+TIE_Y0;end=Math.min(end,bin(nt));}
+      let S0=0,S1=0,S2=0;
+      for(let j=b;j<=end;j++){S0+=mass[j];S1+=mass[j]*xm[j];S2+=mass[j]*(HYPO+(j+0.5)*DSB);}
+      const M=(S1-xs[b]*S0)+ECC*(S2-sb*S0);
+      const r=Math.max(m0.radiusAt(sb+DSB/2),0.008), EI=K_BEND*r*r*r;
+      const target=tied&&sb<TRELLIS_H?0:clamp(Math.max(0,M)*DSB/EI,0,0.14);
+      let rate;
+      if(tied)rate=1-Math.exp(-dt*0.12*this.support);
+      else rate=target>th[b]?1-Math.exp(-dt*0.5):1-Math.exp(-dt*0.03);
+      th[b]+=(target-th[b])*rate;
+    }
+    let tot=0; for(let b=0;b<NB;b++){if(tot+th[b]>2.4)th[b]=Math.max(0,2.4-tot);tot+=th[b];}
+    cum[0]=0; for(let b=0;b<NB;b++)cum[b+1]=cum[b]+th[b];
+    this.lean=tot;
+  }
+  tick(dt){
+    const m=this.sampleMoisture();
+    this.dormant=!this.dead&&!this.doomed&&this.age<4.2&&m<0.22;
+    const dry=clamp((0.3-m)/0.22), over=clamp((m-0.97)/0.2);
+    const target=(this.dormant||this.dead)?0:Math.max(dry,over);
+    this.stress+=(target-this.stress)*(1-Math.exp(-dt*(target>this.stress?0.9:1.6)));
+    if(!this.dead&&!this.doomed&&this.age>=4.2){
+      if(this.stress>0.45)this.health-=(this.stress-0.45)*0.05*dt;
+      else if(this.stress<0.25)this.health=Math.min(1,this.health+0.03*dt);
+      if(this.health<0.2){this.doomed=true;toast('Plant '+this.id+' is past saving.');}
+    }
+    if(this.doomed&&!this.dead){      // past the point of no return: it withers slowly whatever you do
+      this.health=Math.max(0,this.health-0.012*dt);
+      if(this.health<=0){this.dead=true;if(this.trellis){this.detachTendrils(this.trellis);this.trellis=null;}toast('Plant '+this.id+' has died.');}
+    }
+    let rate=0;
+    if(!this.dead&&!this.doomed&&!this.dormant){
+      const gm=(1-clamp(this.stress*1.25))*smooth((m-0.08)/0.22);
+      rate=gm*(0.35+0.65*this.health)*(1+this.vigor)*(1-Math.min(0.4,0.05*this.deadAttached));
+    }
+    this.rate=rate; this.vigor*=Math.exp(-dt*0.03);
+    this.age=Math.min(MAX_AGE,this.age+dt*rate);
+    if(!this.dead)addWater(this.x,this.z,this.rootRadius()+0.25,-(0.004+0.03*smooth(this.age/70))*dt);
+    const aging=(this.doomed||this.dead)?3.5:this.stress*2.6;
+    if(aging>0.4)this.ageLeaves(dt,aging);
+    this.brown=Math.pow(clamp((0.5-this.health)/0.5),1.1);   // fades in as health drops, so it is gradual
+    const wt=Math.max(this.stress,this.doomed?0.85:1-clamp(this.health/0.6));
+    this.wilt+=(wt-this.wilt)*(1-Math.exp(-dt*(wt>this.wilt?1.5:2)));
+    this.physics(dt);
+  }
+  growTendrils(T){
+    const prev=CUR; CUR=this;
+    const main=this.main, tmp=new THREE.Vector3(), r=Math.random;
+    for(const k of [3,4,6,8,10,12,14,16,18,20]){
+      const sT=nodeS(k)+0.12, Lf=1.7+0.5*r(), N=150, p0=new THREE.Vector3(); main.finAt(sT,p0);
+      let best=null,bd=1e9;
+      for(const pole of T.poles){const d=Math.hypot(pole.x-this.x-p0.x,pole.z-this.z-p0.z);if(d<bd){bd=d;best=pole;}}
+      if(bd>1.5)continue;
+      const birth=Math.max(main.reachDay(sT)+3,this.age+0.5+r()*6);
+      const tans=planTendril(p0,Lf,N,best.x-this.x,best.z-this.z,r()<0.5?1:-1);
+      const ax=new Axis({kind:'tendril',parent:main,parentS:sT,N,M:4,Lfinal:Lf,col:C_TEND,tipRatio:0.45,cast:false,radiusFn:()=>0.0075,trellisRef:T,
+        Lfn:d=>Lf*smooth((d-birth)/16),dirFn:(sf,p,i)=>tans[Math.min(i,tans.length-1)]});
+      this.axes.push(ax); this.tendrils.push(ax);
+    }
+    CUR=prev; this.lastAge=-1;
+  }
+  detachTendrils(T){
+    for(const a of this.tendrils)if(a.trellisRef===T){a.removed=true;}
+    this.tendrils=this.tendrils.filter(a=>a.trellisRef!==T);
+  }
+  visual(time){
+    const age=this.age;
+    const bendSum=this.lean;
+    if(this.lastAge<0||Math.abs(age-this.lastAge)>=0.04){
+      for(const a of this.axes)a.update(age);
+      this.lastAge=age; this.lastWilt=this.wilt; this.lastBend=bendSum;
+    }else if(Math.abs(this.wilt-this.lastWilt)>0.012||Math.abs(bendSum-this.lastBend)>0.006){
+      for(const a of this.aerial)a.update(age);
+      this.lastWilt=this.wilt; this.lastBend=bendSum;
+    }
+    this.rootBatch.flush();
+    let dead=0;
+    for(const l of this.leaves){l.update(age,time);if(l.attached&&l.sen>0.5)dead++;}
+    this.deadAttached=dead;
+    for(const b of this.blossoms)b.update(age);
+    const br=this.brown;
+    this.stemMat.color.setRGB(lerp(1,1.75,br),lerp(1,0.62,br),lerp(1,0.45,br));
+    this.rootMat.color.setRGB(lerp(1,0.55,br),lerp(1,0.4,br),lerp(1,0.3,br));
+    const sw=1+0.35*smooth(age/4), husk=smooth((age-4)/6), k=lerp(sw,0.85,husk), s=this.seedMesh;
+    s.scale.set(0.09*k,0.05*k,0.065*k);
+    this.seedMat.color.setRGB(lerp(0.86,0.62,husk),lerp(0.75,0.5,husk),lerp(0.53,0.32,husk));
+    this.seedMat.opacity=1-smooth((age-9)/9); s.visible=this.seedMat.opacity>0.01;
+    const h=0.1*smooth((age-5)/2.2)*(1-smooth((age-8)/7));
+    this.mound.visible=h>0.004; this.mound.scale.set(0.3,Math.max(h,0.001),0.3);
+    const main=this.main;
+    this.H=main.L>0.002?Math.max(0,main.pos[3*main.N+1]):0;
+  }
+  status(){
+    if(this.dead)return['Dead','bad'];
+    if(this.doomed)return['Dying','bad'];
+    if(this.dormant)return['Needs water','idle'];
+    const over=this.moisture>0.97, sick=this.health<0.6&&this.stress>0.2;
+    if(sick)return[over?'Drowning':'Wilting','bad'];
+    if(this.stress>0.25)return over?['Overwatered','wet']:['Thirsty','warn'];
+    if(this.lean>0.35&&!this.trellis)return['Leaning','warn'];
+    return['Thriving','ok'];
+  }
+  stageName(){let k=0;STAGES.forEach((s,i)=>{if(this.age>=s[0])k=i;});return STAGES[k][1];}
+  note(){
+    if(this.dead)return 'It has died. Uproot it to free the space.';
+    if(this.doomed)return 'Past the point of no return. It will wither whatever you do.';
+    if(this.dormant)return 'The seed is dry. Water the soil around it.';
+    if(this.stress>0.25&&this.moisture>0.97)return 'Soggy soil. Let it drain and hold off watering.';
+    if(this.stress>0.25)return 'Soil is too dry. Water it soon.';
+    if(this.lean>0.35&&!this.trellis)return 'Heavy and unsupported, so it is leaning over. Put a trellis next to it.';
+    if(this.deadAttached>0)return this.deadAttached+(this.deadAttached>1?' dying leaves are':' dying leaf is')+' slowing growth. Pick '+(this.deadAttached>1?'them':'it')+'.';
+    if(this.vigor>0.05)return 'Recently pruned and growing fast.';
+    if(this.trellis&&this.support<0.25)return 'Tendrils are reaching for the trellis.';
+    if(this.trellis)return 'Climbing its trellis. Growth ×'+this.rate.toFixed(2);
+    return this.age>=MAX_AGE?'Fully grown. Pick the ripe tomatoes.':'Growth ×'+this.rate.toFixed(2);
+  }
+  dispose(){
+    scene.remove(this.group);
+    this.disp.forEach(d=>d.dispose&&d.dispose());
+  }
+}
+
+/* ---------- input: raycasting, tools, camera ---------- */
+const dockEl=document.querySelector('.bottom');
+const view={ty:-0.3,dist:22,theta:0.35,user:{dTheta:0,dPhi:0,zoom:1},pan:new THREE.Vector3(),auto:false};
+let dragging=false;
+function updateCamera(dt,H){
+  const top=Math.max(H,0)*1.06+0.9, bottom=lerp(-1.1,-0.5,smooth(H/4)), ext=Math.max(top-bottom,1.7);
+  const aspect=camera.aspect, t=Math.tan(camera.fov*Math.PI/360);
+  const wNeed=2*HX+3;
+  const dockFrac=clamp(dockEl.offsetHeight/Math.max(1,canvas.clientHeight)+0.04,0,0.6), avail=1-dockFrac;
+  const dist=Math.max(0.8*ext/2/t*1.1/avail,(wNeed/2)/(t*aspect)*1.02,9);
+  const ty=(top+bottom)/2;
+  const k=1-Math.exp(-dt*4);
+  view.ty+=(ty-view.ty)*k;
+  view.dist=Math.exp(lerp(Math.log(view.dist),Math.log(dist),k));
+  if(view.auto&&!dragging)view.user.dTheta+=dt*0.16;
+  const phi=clamp(lerp(0.9,0.45,smooth(H/8))+view.user.dPhi,-0.12,1.45);
+  const th=view.theta+view.user.dTheta, d=view.dist*view.user.zoom;
+  const cx=view.pan.x, cy=view.ty*0.6+view.pan.y, cz=view.pan.z;
+  camera.position.set(cx+Math.sin(th)*Math.cos(phi)*d,cy+Math.sin(phi)*d,cz+Math.cos(th)*Math.cos(phi)*d);
+  camera.lookAt(cx,cy-dockFrac*d*t,cz);
+  const sc=sun.shadow.camera, sx=19;
+  sc.left=-sx;sc.right=sx;sc.top=sx*0.8;sc.bottom=-sx*0.8;sc.updateProjectionMatrix();
+  sun.target.position.set(0,H*0.3,0);
+  sun.position.set(0.55*50,0.85*50+H*0.3,0.35*50);
+}
+const raycaster=new THREE.Raycaster(), _ndc=new THREE.Vector2(), soilPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0), _hit=new THREE.Vector3();
+function setRay(cx,cy){
+  const rc=canvas.getBoundingClientRect();
+  _ndc.set((cx-rc.left)/rc.width*2-1,-((cy-rc.top)/rc.height)*2+1);
+  raycaster.setFromCamera(_ndc,camera);
+}
+function soilHit(cx,cy){
+  setRay(cx,cy);
+  if(!raycaster.ray.intersectPlane(soilPlane,_hit))return null;
+  if(Math.abs(_hit.x)>HX-0.15||Math.abs(_hit.z)>HZ-0.15)return null;
+  return _hit;
+}
+function pickables(){
+  const list=[];
+  for(const P of plants){
+    for(const b of P.blossoms)if(b.fruitVisible&&!b.gone)list.push(b.fruit);
+    for(const l of P.leaves)if(l.mesh&&l.mesh.visible&&l.sen>0.5&&!l.removed)list.push(l.mesh);
+  }
+  for(const T of trellises)for(const m of T.meshes)list.push(m);
+  return list;
+}
+function rayHit(cx,cy){
+  setRay(cx,cy);
+  const hits=raycaster.intersectObjects(pickables(),false);
+  return hits.length?hits[0].object.userData.owner:null;
+}
+function plantSpotOk(x,z){
+  if(plants.length>=MAXP)return false;
+  if(Math.abs(x)>HX-0.6||Math.abs(z)>HZ-0.6)return false;
+  return plants.every(P=>Math.hypot(P.x-x,P.z-z)>=MIN_GAP);
+}
+function trellisSpotOk(x,z){
+  if(trellises.length>=MAXT)return false;
+  if(Math.abs(x)>HX-0.9||Math.abs(z)>HZ-0.9)return false;
+  return trellises.every(T=>Math.hypot(T.x-x,T.z-z)>=1.2);
+}
+function trellisAngle(){return view.theta+view.user.dTheta+trellisSpin;}
+
+/* hover marker, ghost trellis, watering can and droplets */
+const marker=new THREE.Group(); marker.visible=false; scene.add(marker);
+const ringMat=new THREE.MeshBasicMaterial({color:0x6cb8f0,transparent:true,opacity:0.8,depthWrite:false,side:THREE.DoubleSide});
+const ring=new THREE.Mesh(new THREE.RingGeometry(0.93,1,48),ringMat); ring.rotation.x=-Math.PI/2; marker.add(ring);
+const ghostMat=new THREE.MeshStandardMaterial({color:0xdcc088,transparent:true,opacity:0.8,roughness:.8});
+const ghost=new THREE.Mesh(new THREE.SphereGeometry(1,16,10),ghostMat); ghost.scale.set(0.09,0.05,0.065); ghost.position.y=0.03; marker.add(ghost);
+const ghostT=buildTrellisMeshes(5,true).g; ghostT.visible=false; marker.add(ghostT);
+const can=new THREE.Group(); can.visible=false; scene.add(can);   // origin sits at the spout tip so the can tilts around it
+(function(){
+  const V=(x,y)=>new THREE.Vector3(x,y,0);
+  const steel=new THREE.MeshStandardMaterial({color:0x5aa0c2,roughness:.32,metalness:.5}), dark=new THREE.MeshStandardMaterial({color:0x2d6a88,roughness:.4,metalness:.45});
+  const prof=[[0,0],[0.5,0],[0.57,0.07],[0.57,0.72],[0.51,0.8],[0.45,0.84],[0.0,0.84]].map(p=>new THREE.Vector2(p[0],p[1]));
+  const body=new THREE.Mesh(new THREE.LatheGeometry(prof,32),steel); body.position.set(1.65,0.1,0); can.add(body);
+  const rim=new THREE.Mesh(new THREE.TorusGeometry(0.47,0.03,8,28),dark); rim.rotation.x=Math.PI/2; rim.position.set(1.65,0.94,0); can.add(rim);
+  const curve=new THREE.CatmullRomCurve3([V(1.2,0.28),V(0.85,0.46),V(0.45,0.5),V(0.18,0.34)]);
+  can.add(new THREE.Mesh(new THREE.TubeGeometry(curve,24,0.055,10,false),steel));
+  const rose=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.08,0.13,18),dark); rose.position.set(0.13,0.3,0); rose.rotation.z=2.2; can.add(rose);
+  const handle=new THREE.Mesh(new THREE.TorusGeometry(0.62,0.04,8,28,Math.PI),dark); handle.position.set(1.65,0.92,0); can.add(handle);
+})();
+const DROPS=140, dropPos=new Float32Array(DROPS*3), dropVel=new Float32Array(DROPS);
+const dropGeo=new THREE.BufferGeometry(); dropGeo.setAttribute('position',new THREE.BufferAttribute(dropPos,3));
+const drops=new THREE.Points(dropGeo,new THREE.PointsMaterial({color:0x8fd0ff,size:0.09,transparent:true,opacity:0.85,depthWrite:false}));
+drops.frustumCulled=false; drops.visible=false; scene.add(drops);
+let pouring=false; const pourAt=new THREE.Vector3(), hoverAt=new THREE.Vector3(); let hoverOn=false;
+function spawnDrop(i){
+  const a=Math.random()*TAU, r=Math.sqrt(Math.random())*0.6;
+  dropPos[3*i]=pourAt.x+Math.cos(a)*r*0.5; dropPos[3*i+1]=1.55+Math.random()*0.2; dropPos[3*i+2]=pourAt.z+Math.sin(a)*r;
+  dropVel[i]=2.5+Math.random()*1.5;
+}
+function updatePour(dt){
+  const show=tool==='water'&&hoverOn;
+  can.visible=show;
+  if(show){
+    can.position.set(hoverAt.x,1.75,hoverAt.z);
+    can.rotation.z=lerp(can.rotation.z,pouring?0.42:0.0,1-Math.exp(-dt*8));
+  }
+  drops.visible=pouring;
+  if(pouring){
+    for(let i=0;i<DROPS;i++){
+      const y=dropPos[3*i+1]-dropVel[i]*dt; dropVel[i]+=9*dt;
+      if(y<0.04)spawnDrop(i);else dropPos[3*i+1]=y;
+    }
+    dropGeo.attributes.position.needsUpdate=true;
+  }
+}
+function updateMarker(){
+  marker.visible=false; ghostT.visible=false;
+  if(!hoverOn||tool==='prune')return;
+  marker.position.set(hoverAt.x,groundY(hoverAt.x,hoverAt.z)+0.05,hoverAt.z);
+  marker.visible=true;
+  if(tool==='water'){ring.scale.setScalar(0.8);ghost.visible=false;ringMat.color.set(0x6cb8f0);}
+  else if(tool==='seed'){
+    const ok=plantSpotOk(hoverAt.x,hoverAt.z);
+    ring.scale.setScalar(0.28);ghost.visible=true;
+    ringMat.color.set(ok?0x7fe39a:0xff7a63); ghostMat.color.set(ok?0xdcc088:0xff9d8f);
+  }else{
+    const ok=trellisSpotOk(hoverAt.x,hoverAt.z);
+    ring.scale.setScalar(0.35);ghost.visible=false; ghostT.visible=true; ghostT.rotation.y=trellisAngle();
+    ringMat.color.set(ok?0x7fe39a:0xff7a63); ghostTrellisMat.color.set(ok?0xdcc088:0xff9d8f);
+  }
+}
+
+const pointers=new Map(); let pinchD=0, down=null, hoverT=0;
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('pointerdown',e=>{
+  canvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,btn:e.button});
+  down={x:e.clientX,y:e.clientY,moved:0,btn:e.button,multi:pointers.size>1,mode:'orbit'};
+  if(e.button===0&&tool==='water'&&pointers.size===1){
+    const h=soilHit(e.clientX,e.clientY);
+    if(h){pouring=true;down.mode='water';pourAt.copy(h);hoverAt.copy(h);hoverOn=true;for(let i=0;i<DROPS;i++){spawnDrop(i);dropPos[3*i+1]=0.3+Math.random()*1.6;}}
+  }
+  if(down.mode==='orbit')dragging=true;
+  if(pointers.size===2){const [a,b]=[...pointers.values()];pinchD=Math.hypot(a.x-b.x,a.y-b.y);down.multi=true;pouring=false;}
+});
+canvas.addEventListener('pointermove',e=>{
+  const p=pointers.get(e.pointerId);
+  if(!p){
+    const now=performance.now(); if(now-hoverT<40)return; hoverT=now;
+    if(tool==='prune'){hoverOn=false;canvas.style.cursor=rayHit(e.clientX,e.clientY)?'pointer':'grab';}
+    else{
+      const h=soilHit(e.clientX,e.clientY);
+      hoverOn=!!h; if(h)hoverAt.copy(h);
+      canvas.style.cursor=h?(tool==='water'?'crosshair':'cell'):'grab';
+    }
+    return;
+  }
+  const dx=e.clientX-p.x, dy=e.clientY-p.y; p.x=e.clientX;p.y=e.clientY;
+  if(down)down.moved+=Math.abs(dx)+Math.abs(dy);
+  if(down&&down.mode==='water'){
+    const h=soilHit(e.clientX,e.clientY);
+    if(h){pourAt.copy(h);hoverAt.copy(h);hoverOn=true;}
+    return;
+  }
+  if(pointers.size===1){
+    if(p.btn===2){
+      const half=view.dist*view.user.zoom*Math.tan(camera.fov*Math.PI/360), sc=2*half/Math.max(1,canvas.clientHeight), m=camera.matrixWorld.elements;
+      view.pan.x+=(-dx*m[0]+dy*m[4])*sc; view.pan.y+=(-dx*m[1]+dy*m[5])*sc; view.pan.z+=(-dx*m[2]+dy*m[6])*sc;
+    }else{view.user.dTheta-=dx*0.007;view.user.dPhi=clamp(view.user.dPhi+dy*0.005,-0.5,1.2);}
+  }else if(pointers.size===2){
+    const [a,b]=[...pointers.values()],d=Math.hypot(a.x-b.x,a.y-b.y);
+    if(pinchD)view.user.zoom=clamp(view.user.zoom*pinchD/d,0.08,2.2); pinchD=d;
+  }
+});
+const endPtr=e=>{
+  const wasClick=down&&down.moved<6&&down.btn===0&&!down.multi&&down.mode==='orbit'&&e.type==='pointerup'&&pointers.size===1;
+  if(down&&down.mode==='water')pouring=false;
+  pointers.delete(e.pointerId); if(!pointers.size){dragging=false;down=null;} pinchD=0;
+  if(wasClick){
+    if(tool==='seed'){const h=soilHit(e.clientX,e.clientY);if(h)placeSeed(h.x,h.z);}
+    else if(tool==='trellis'){const h=soilHit(e.clientX,e.clientY);if(h)placeTrellis(h.x,h.z);}
+    else if(tool==='prune')removeItem(rayHit(e.clientX,e.clientY));
+  }
+};
+canvas.addEventListener('pointerup',endPtr);canvas.addEventListener('pointercancel',endPtr);
+canvas.addEventListener('pointerleave',()=>{if(!pointers.size)hoverOn=false;});
+canvas.addEventListener('wheel',e=>{e.preventDefault();view.user.zoom=clamp(view.user.zoom*Math.exp(e.deltaY*0.0012),0.06,2.2);},{passive:false});
+canvas.addEventListener('dblclick',()=>{view.pan.set(0,0,0);view.user.zoom=1;view.user.dPhi=0;view.user.dTheta=0;});
+
+function resize(){
+  const w=canvas.clientWidth||1,h=canvas.clientHeight||1;
+  renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(document.getElementById('stage')); resize();
+
+/* ---------- actions ---------- */
+const $=id=>document.getElementById(id);
+let toastT=0;
+function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2400);}
+function addPlantAt(x,z){const P=new Plant(x,z);plants.push(P);addCard(P);refreshSupport();refreshTip();return P;}
+function placeSeed(x,z){
+  if(plants.length>=MAXP){toast('The bed is full. Uproot a plant to make room.');return;}
+  if(!plantSpotOk(x,z)){toast('Too close to another plant or the edge.');return;}
+  addPlantAt(x,z);
+  toast('Seed planted. Now water the soil around it.');
+}
+function placeTrellis(x,z){
+  if(trellises.length>=MAXT){toast('That is all the trellises you have ('+MAXT+').');return;}
+  if(!trellisSpotOk(x,z)){toast('Too close to another trellis or the edge.');return;}
+  trellises.push(new Trellis(x,z,trellisAngle()));
+  refreshSupport(); refreshTip();
+  toast('Trellis placed. Plants within reach will climb it.');
+}
+function removeTrellis(T){
+  trellises=trellises.filter(t=>t!==T); T.dispose(); refreshSupport(); refreshTip();
+}
+function spawnVolunteers(){
+  const list=pendingSpawns; pendingSpawns=[];
+  for(const sp of list){
+    if(Math.random()>0.6)continue;
+    let spot=null;
+    for(let i=0;i<14&&!spot;i++){
+      const a=Math.random()*TAU, d=i===0?0:0.5+Math.random()*1.3, x=sp.x+Math.cos(a)*d, z=sp.z+Math.sin(a)*d;
+      if(plantSpotOk(x,z))spot={x,z};
+    }
+    if(spot){addPlantAt(spot.x,spot.z);toast('A fallen tomato sprouted a new seedling.');}
+  }
+}
+function removeItem(o){
+  if(!o)return;
+  if(o instanceof Trellis){removeTrellis(o);toast('Trellis removed.');return;}
+  if(o instanceof Blossom){
+    o.removed=true;
+    if(o.fallClock!==null&&o.rot>0.5)toast('Composted a rotten tomato.');
+    else{harvested++;if(o.ripe)harvestedRipe++;toast(o.ripe?'Harvested a ripe cherry tomato':'Picked an unripe tomato');}
+  }else{
+    const P=o.plant, early=o.dropAt===null;
+    o.removed=true; P.vigor=Math.min(0.5,P.vigor+(early?0.12:0.03));
+    toast(early?'Dying leaf removed. The plant perks up.':'Fallen leaf cleared.');
+  }
+}
+function uproot(P){
+  P.dispose(); plants=plants.filter(q=>q!==P);
+  const c=cards.get(P.id); if(c){c.el.remove();cards.delete(P.id);}
+  refreshTip();
+}
+function setTool(t){
+  tool=t; pouring=false; hoverOn=false;
+  document.querySelectorAll('.tool').forEach(b=>b.setAttribute('aria-pressed',b.dataset.tool===t?'true':'false'));
+  canvas.style.cursor='grab'; refreshTip();
+}
+function setSpeed(s){
+  speed=s;
+  document.querySelectorAll('.speed button').forEach(b=>b.setAttribute('aria-pressed',parseFloat(b.dataset.speed)===s?'true':'false'));
+}
+function refreshTip(){
+  const el=$('tip'); let msg;
+  const dry=plants.find(p=>p.dormant), bad=plants.find(p=>!p.dead&&p.stress>0.25), lean=plants.find(p=>!p.dead&&p.lean>0.35&&!p.trellis);
+  if(!plants.length)msg=tool==='seed'?'Click the soil to plant your first seed.':'Plant a seed first. Choose Seed and click the soil.';
+  else if(dry&&tool!=='water')msg='A seed is waiting for water. Choose Water and hold on the soil near it.';
+  else if(bad&&tool!=='water'&&bad.moisture<0.5)msg='A plant is thirsty. Choose Water to save it.';
+  else if(lean&&tool!=='trellis')msg='A plant is leaning under its own weight. Choose Trellis and place one beside it.';
+  else msg=tool==='seed'?'Click bare soil to plant another seed ('+plants.length+' of '+MAXP+').'
+    :tool==='water'?'Hold the mouse on the soil to water. Damp is good, soggy is not.'
+    :tool==='trellis'?'Click the soil beside a plant to place a trellis ('+trellises.length+' of '+MAXT+'). R rotates it.'
+    :'Click a yellow or brown leaf to pick it, a tomato to harvest it, or a trellis to remove it.';
+  el.textContent=msg;
+}
+
+/* ---------- plant cards ---------- */
+const cards=new Map();
+function addCard(P){
+  const el=document.createElement('article'); el.className='card'; el.dataset.s='idle';
+  el.innerHTML='<header><strong>Plant '+P.id+'</strong><span class="chip idle">Needs water</span><button class="x" type="button" aria-label="Uproot plant '+P.id+'">×</button></header>'
+   +'<p class="stage"></p>'
+   +'<div class="meter"><span>Water</span><div class="bar" role="img" aria-label="Soil moisture"><i class="zone"></i><i class="fill water"></i></div></div>'
+   +'<div class="meter"><span>Health</span><div class="bar" role="img" aria-label="Plant health"><i class="fill health"></i><i class="pnr" title="Point of no return"></i></div></div>'
+   +'<p class="note"></p>';
+  $('garden').appendChild(el);
+  $('gardenEmpty').hidden=true;
+  el.addEventListener('click',e=>{if(e.target.closest('.x'))return;view.pan.set(P.x,0,P.z);});
+  el.querySelector('.x').addEventListener('click',()=>uproot(P));
+  cards.set(P.id,{el,chip:el.querySelector('.chip'),stage:el.querySelector('.stage'),water:el.querySelector('.fill.water'),health:el.querySelector('.fill.health'),note:el.querySelector('.note')});
+  updateCard(P);
+}
+function updateCard(P){
+  const c=cards.get(P.id); if(!c)return;
+  const [label,cls]=P.status();
+  c.el.dataset.s=cls; c.chip.textContent=label; c.chip.className='chip '+cls;
+  c.stage.textContent=P.dead?'Died on day '+Math.floor(P.age):'Day '+Math.floor(P.age)+' · '+P.stageName();
+  c.water.style.width=clamp(P.moisture/MOIST_MAX,0,1)*100+'%';
+  c.health.style.width=P.health*100+'%';
+  c.note.textContent=P.note();
+}
+function updateEmpty(){$('gardenEmpty').hidden=plants.length>0;}
+
+/* ---------- wiring ---------- */
+document.querySelectorAll('.tool').forEach(b=>b.addEventListener('click',()=>setTool(b.dataset.tool)));
+document.querySelectorAll('.speed button').forEach(b=>b.addEventListener('click',()=>setSpeed(parseFloat(b.dataset.speed))));
+function toggle(btn,fn){btn.addEventListener('click',()=>{const on=btn.getAttribute('aria-pressed')!=='true';btn.setAttribute('aria-pressed',on);fn(on);});}
+toggle($('roots'),on=>setRootsView(on));
+toggle($('spin'),on=>{view.auto=on;});
+toggle($('auto'),on=>{autoWater=on;toast(on?'Auto-water on. Dry soil is topped up for you.':'Auto-water off.');});
+toggle($('panelBtn'),on=>{$('garden').classList.toggle('hidden',!on);});
+let clearT=0;
+$('clear').addEventListener('click',()=>{
+  const b=$('clear');
+  if(b.dataset.armed){
+    for(const P of plants.slice())uproot(P);
+    for(const T of trellises.slice())removeTrellis(T);
+    field.fill(0); clock=0; harvested=0; harvestedRipe=0; plantCounter=0; pendingSpawns=[];
+    delete b.dataset.armed; b.textContent='Clear bed'; toast('Bed cleared.'); updateEmpty();
+  }else{
+    b.dataset.armed='1'; b.textContent='Click again to clear'; clearTimeout(clearT);
+    clearT=setTimeout(()=>{delete b.dataset.armed;b.textContent='Clear bed';},3000);
+  }
+});
+let lastSpeed=1;
+document.addEventListener('keydown',e=>{
+  if(/INPUT|SELECT|TEXTAREA/.test(e.target.tagName))return;
+  if(e.key==='1')setTool('seed'); else if(e.key==='2')setTool('water'); else if(e.key==='3')setTool('trellis'); else if(e.key==='4')setTool('prune');
+  else if(e.key==='r'||e.key==='R')trellisSpin+=Math.PI/4;
+  else if(e.code==='Space'&&e.target.tagName!=='BUTTON'){e.preventDefault();if(speed>0){lastSpeed=speed;setSpeed(0);}else setSpeed(lastSpeed||1);}
+});
+
+/* ---------- main loop ---------- */
+let last=performance.now(), uiT=0, soilT=0, shT=0;
+function frame(now){
+  const rdt=Math.min(0.1,(now-last)/1000); last=now;
+  const time=now/1000, dt=rdt*speed*BASE_RATE;
+  if(dt>0){
+    if(autoWater)for(const P of plants){if(P.dead||P.doomed)continue;const m=P.sampleMoisture();if(m<0.55)addWater(P.x,P.z,1.1,(0.62-m)*3*dt);}
+    clock+=dt;stepField(dt);for(const P of plants)P.tick(dt);
+  }
+  if(pouring)addWater(pourAt.x,pourAt.z,0.8,1.5*rdt);
+  updatePour(rdt); updateMarker();
+  if(now-soilT>110){soilT=now;updateSoilColors();}
+  let Hmax=0;
+  for(const P of plants){P.visual(time);Hmax=Math.max(Hmax,P.H);}
+  if(pendingSpawns.length)spawnVolunteers();
+  updateCamera(Math.min(0.3,rdt),Hmax);
+  if(now-uiT>200){
+    uiT=now;
+    $('gDay').textContent=Math.floor(clock); $('gHarv').textContent=harvested;
+    for(const P of plants)updateCard(P);
+    updateEmpty(); refreshTip();
+  }
+  if(now-shT>100){shT=now;renderer.shadowMap.needsUpdate=true;}
+  renderer.render(scene,camera);
+  requestAnimationFrame(frame);
+}
+setRootsView(true); setTool('seed'); setSpeed(1); updateSoilColors();
+window.tomato={
+  plants:()=>plants, trellises:()=>trellises, place:placeSeed, trellis:placeTrellis, water:(x,z,a)=>addWater(x,z,1.2,a), field, setSpeed, setTool,
+  sim:(days)=>{const n=Math.round(days/0.1);for(let i=0;i<n;i++){clock+=0.1;stepField(0.1);for(const P of plants)P.tick(0.1);if(i%5==0)for(const P of plants)P.visual(0);}},
+};
+requestAnimationFrame(frame);
+})();
+</script>
+
+</body>
+</html>
