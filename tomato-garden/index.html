@@ -183,7 +183,7 @@ function rng(seed){let a=seed>>>0;return()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math
 
 const MAX_DAY=140;           // days from sowing; 1 world unit = 10 cm
 const HX=8, HZ=4, BED_BOTTOM=-3.4;   // garden bed half-width, half-depth, floor
-const SEED_POS=new THREE.Vector3(0,-0.06,0), HYPO=0.62;
+const SEED_POS=new THREE.Vector3(0,-0.1,0), HYPO=0.62;
 let clock=0, pendingSpawns=[];
 const UP=new THREE.Vector3(0,1,0), ZAXIS=new THREE.Vector3(0,0,1), XAXIS=new THREE.Vector3(1,0,0);
 
@@ -341,14 +341,14 @@ function fruitTextures(){
 const leafTex=leafTextures(), woodTex=woodTexture(), bambooTex=bambooTexture(), fruitTex=fruitTextures();
 
 const soilTex=soilTextures();
-const soilMat=new THREE.MeshStandardMaterial({map:soilTex.map,bumpMap:soilTex.bump,bumpScale:2.2,roughness:1,vertexColors:true});
-let soilGeo;
+const soilMat=new THREE.MeshStandardMaterial({map:soilTex.map,bumpMap:soilTex.bump,bumpScale:2.2,roughness:1,vertexColors:true,transparent:true});
+let soilGeo, rootsOn=true; const clodSets=[];
 const moundGeo=new THREE.SphereGeometry(1,28,10,0,TAU,0,Math.PI/2), moundMat=new THREE.MeshStandardMaterial({map:soilTex.map,bumpMap:soilTex.bump,bumpScale:2.2,roughness:1});
 (function(){   // uneven soil surface across the whole bed
   const g=new THREE.PlaneGeometry(2*HX,2*HZ,160,80), p=g.attributes.position;
   for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i);p.setZ(i,groundY(x,-y));}
   g.computeVertexNormals();
-  g.setAttribute('color',new THREE.Float32BufferAttribute(new Float32Array(p.count*3).fill(1),3)); soilGeo=g;
+  g.setAttribute('color',new THREE.Float32BufferAttribute(new Float32Array(p.count*4).fill(1),4)); soilGeo=g;
   const m=new THREE.Mesh(g,soilMat); m.rotation.x=-Math.PI/2; m.receiveShadow=true; scene.add(m);
   const r=rng(31), dummy=new THREE.Object3D(), col=new THREE.Color();
   const mkInst=(n,geo,mat,fn)=>{
@@ -358,7 +358,7 @@ const moundGeo=new THREE.SphereGeometry(1,28,10,0,TAU,0,Math.PI/2), moundMat=new
       fn(x,z,dummy,col);
       dummy.updateMatrix(); im.setMatrixAt(i,dummy.matrix); im.setColorAt(i,col);
     }
-    im.receiveShadow=true; im.frustumCulled=false; scene.add(im);
+    im.receiveShadow=true; im.frustumCulled=false; scene.add(im); clodSets.push({im,n});
   };
   mkInst(6500,new THREE.IcosahedronGeometry(1,0),new THREE.MeshStandardMaterial({roughness:1,flatShading:true}),(x,z,o,c)=>{
     const s=0.012+Math.pow(r(),2.4)*0.06;
@@ -388,10 +388,23 @@ const floorShadow=new THREE.Mesh(new THREE.PlaneGeometry(160,160),new THREE.Shad
 floorShadow.rotation.x=-Math.PI/2; floorShadow.position.y=BED_BOTTOM-0.28; floorShadow.receiveShadow=true; scene.add(floorShadow);
 
 function setRootsView(on){
+  rootsOn=on;
   soilWallMat.opacity=on?0.36:0.97;
   soilWallMat.depthWrite=!on;
 }
 
+
+/* Planting a seed clears the loose clods around it so the sprout and roots are easy to see. */
+function clearClods(x,z,R){
+  const m=new THREE.Matrix4(), p=new THREE.Vector3(), q=new THREE.Quaternion(), s=new THREE.Vector3();
+  for(const set of clodSets){
+    for(let i=0;i<set.n;i++){
+      set.im.getMatrixAt(i,m); m.decompose(p,q,s);
+      if(Math.hypot(p.x-x,p.z-z)<R&&s.x>0.0002){m.makeScale(0.0001,0.0001,0.0001);set.im.setMatrixAt(i,m);}
+    }
+    set.im.instanceMatrix.needsUpdate=true;
+  }
+}
 
 /* ---------- geometry helpers ---------- */
 class GeoBuilder{
@@ -625,7 +638,7 @@ class Axis{
     const N=this.N;
     this.pos=new Float32Array(3*(N+1)); this.tan=new Float32Array(3*(N+1));
     this.tab=new Float32Array(3*(N+1)); this.fin=new Float32Array(3*(N+1));
-    this.L=0; this.rb=0; this.plant=CUR;
+    this.L=0; this.rb=0; this.plant=CUR; this.dv=0; this.dvel=0; this.dvLast=0; this.dvInit=false;
     this.bake();
     const d0=new THREE.Vector3(this.tab[0],this.tab[1],this.tab[2]);
     this.ref=Math.abs(d0.y)>0.9?new THREE.Vector3(0,0,1):new THREE.Vector3().crossVectors(d0,UP).normalize();
@@ -688,6 +701,14 @@ class Axis{
     const N=this.N, M=this.M, ds=L/N, [cs,sn]=ringTrig(M), PL=this.plant;
     let px,py,pz;
     if(this.parent){this.parent.posAt(this.parentS,_P);px=_P.x;py=_P.y;pz=_P.z;}else{px=this.base0.x;py=this.base0.y;pz=this.base0.z;}
+    if(this.planner){   // tendrils re-plan from where the stem really is, so they always end up on the pole
+      if(!this.planBase||Math.abs(px-this.planBase.x)+Math.abs(py-this.planBase.y)+Math.abs(pz-this.planBase.z)>0.02){
+        this.planBase=this.planBase||new THREE.Vector3(); this.planBase.set(px,py,pz);
+        const tans=this.planner(this.planBase);
+        if(!tans){this.removed=true;this.L=0;if(this.mesh)this.mesh.visible=false;return;}
+        for(let i=0;i<=N;i++){const t=tans[Math.min(i,tans.length-1)];this.tab[3*i]=t.x;this.tab[3*i+1]=t.y;this.tab[3*i+2]=t.z;}
+      }
+    }
     const hook=this.hookFn?this.hookFn(day):0, droop=this.droopFn?this.droopFn(day):0;
     const aerial=this.kind!=='root'&&this.kind!=='tendril';
     const wilt=aerial?PL.wilt:0;
@@ -843,14 +864,22 @@ function fruitColor(rp,out){
   }
   const l=FRUIT_STOPS[FRUIT_STOPS.length-1][1]; return out.setRGB(l[0],l[1],l[2]);
 }
-const _dir=new THREE.Vector3(),_end=new THREE.Vector3(),_ctr=new THREE.Vector3();
+const _dir=new THREE.Vector3(),_end=new THREE.Vector3(),_ctr=new THREE.Vector3(),_qb=new THREE.Quaternion(),_ax=new THREE.Vector3(),_cv=new THREE.Vector3();
+/* height above the ground of a fruit dropped from h, bouncing three times with energy loss (t in garden days) */
+function bounceH(t,h){
+  const g=45, tf=Math.sqrt(2*Math.max(h,0.001)/g);
+  if(t<tf)return h-0.5*g*t*t;
+  let tt=t-tf, v=g*tf*0.36;
+  for(let k=0;k<3;k++){const tb=2*v/g;if(tt<tb)return v*tt-0.5*g*tt*tt;tt-=tb;v*=0.36;}
+  return 0;
+}
 class Blossom{
   constructor(o){
     Object.assign(this,o);
     this.plant=CUR;
     this.ped=new THREE.Mesh(pedGeo,pedMat);
     this.flower=new THREE.Mesh(flowerGeo,new THREE.MeshStandardMaterial({vertexColors:true,side:THREE.DoubleSide,roughness:.6,morphTargets:true}));
-    this.fruitMat=new THREE.MeshStandardMaterial({color:0x4d8423,roughness:.28});
+    this.fruitMat=new THREE.MeshStandardMaterial({color:0x4d8423,roughness:.28,map:fruitTex.map,bumpMap:fruitTex.bump,bumpScale:0.45});
     this.calyxMat=calyxMat.clone();
     this.fruit=new THREE.Mesh(fruitGeo,this.fruitMat);
     this.calyx=new THREE.Mesh(calyxGeo,this.calyxMat);
@@ -860,7 +889,7 @@ class Blossom{
     this.fruit.userData.owner=this; this.removed=false; this.gone=false;
     this.fruitVisible=false; this.ripe=false; this.rot=0;
     this.ripeClock=null; this.fallClock=null; this.fallRipe=false; this.rotted=false; this.spawned=false;
-    this.hold=9+7*Math.random(); this.start=new THREE.Vector3(); this.dx=(Math.random()-0.5)*0.7; this.dz=(Math.random()-0.5)*0.7;
+    this.tumble=Math.random()*TAU; this.hold=9+7*Math.random(); this.start=new THREE.Vector3(); this.dx=(Math.random()-0.5)*0.7; this.dz=(Math.random()-0.5)*0.7;
   }
   /* pedicel end point (_end) and its direction (_dir) on a given plant age */
   calc(day){
@@ -906,13 +935,16 @@ class Blossom{
       const since=clock-this.fallClock, fp=clamp(since/1.0), t=since-1;
       this.rot=smooth(t/16); sk=1-0.55*smooth((t-14)/22);
       const rr=this.fr*sk, wx=P.x+this.start.x+this.dx, wz=P.z+this.start.z+this.dz;
-      const rest=groundY(wx,wz)+rr*this.sq*0.86;
-      const x=this.start.x+this.dx*smooth(fp), z=this.start.z+this.dz*smooth(fp);
-      const y=fp<1?this.start.y-(this.start.y-rest)*fp*fp:rest;
+      const gy=groundY(wx,wz), h0=Math.max(0,this.start.y-(gy+this.fr*this.sq*0.86));
+      const tf=Math.sqrt(2*Math.max(h0,0.001)/45), rest=gy+rr*this.sq*0.86, fx=smooth(clamp(since/(tf+0.2))), dl=Math.hypot(this.dx,this.dz)||1;
+      let x=this.start.x+this.dx*fx, z=this.start.z+this.dz*fx, spin=since*3;
+      if(since>tf){const rd=0.28*(1-Math.exp(-(since-tf)*7));x+=this.dx/dl*rd;z+=this.dz/dl*rd;spin=tf*3+rd/Math.max(rr,0.05);}   // rolls to a stop
+      const y=rest+bounceH(since,h0);
       this.fruit.position.set(x,y,z);
       this.fruit.scale.set(rr,rr*this.sq,rr);
+      _qb.setFromAxisAngle(_ax.set(this.dz/dl,0,-this.dx/dl),spin+this.tumble); this.fruit.quaternion.copy(_qb);
       this.fruitMat.color.r=lerp(this.fruitMat.color.r,0.2,this.rot);this.fruitMat.color.g=lerp(this.fruitMat.color.g,0.1,this.rot);this.fruitMat.color.b=lerp(this.fruitMat.color.b,0.06,this.rot);
-      this.calyx.position.set(x,y+0.78*rr,z); this.calyx.scale.setScalar(rr);
+      _cv.set(0,0.78*rr*this.sq,0).applyQuaternion(_qb); this.calyx.position.set(x+_cv.x,y+_cv.y,z+_cv.z); this.calyx.quaternion.copy(_qb); this.calyx.scale.setScalar(rr);
       this.calyxMat.color.setRGB(lerp(1,1.8,this.rot),lerp(1,0.7,this.rot),lerp(1,0.5,this.rot));
       this.fruit.visible=this.calyx.visible=true;
       this.fruitVisible=true; this.ripe=this.fallRipe;
@@ -928,6 +960,7 @@ class Blossom{
     }
     this.calyxMat.color.setRGB(lerp(1,1.8,brown),lerp(1,0.7,brown),lerp(1,0.5,brown));
     this.fruitVisible=true; this.ripe=full;
+    this.fruit.quaternion.set(0,0,0,1); this.calyx.quaternion.set(0,0,0,1);
     this.fruit.visible=true; this.calyx.visible=true;
     this.fruit.position.set(_end.x,_end.y-r*sk*0.78,_end.z);
     this.fruit.scale.set(r*sk,r*sk*this.sq,r*sk);
@@ -971,7 +1004,7 @@ function buildPlant(P){
     const ox=Math.sin(th), oz=Math.cos(th), px=Math.cos(th), pz=-Math.sin(th), pphase=r()*6;
     const truss=new Axis({kind:'truss',parent,parentS:sK,N:22,M:5,Lfinal:Lf,col:C_TRUSS,tipRatio:0.6,rFactor:0.3,rMin:0.012,
       Lfn:d=>Lf*smooth((d-(reach+3))/18),
-      droopFn:d=>1.1*smooth((d-(reach+20))/40),
+      droopFn:()=>truss.dv,
       dirFn:(sf)=>{const sw=0.25*Math.sin(sf*9+pphase);return tmp.set(ox+px*sw,0.6-0.9*sf,oz+pz*sw);}});
     axes.push(truss);
     for(let j=0;j<n;j++){
@@ -987,7 +1020,7 @@ function buildPlant(P){
   /* branching: side shoots with their own leaves, sub-branches and clusters */
   const addShoot=(parent,sK,th,Lf,birth,depth)=>{
     const ox=Math.sin(th), oz=Math.cos(th), wob=r()*6;
-    const shoot=new Axis({kind:'shoot',parent,parentS:sK,N:40,M:6,Lfinal:Lf,col:C_STEM,rFactor:0.5,rMin:0.012,tipRatio:0.2,
+    const shoot=new Axis({kind:'shoot',parent,parentS:sK,N:40,M:6,Lfinal:Lf,col:C_STEM,rFactor:0.5,rMin:0.012,tipRatio:0.2,droopFn:()=>shoot.dv,
       Lfn:d=>Lf*smooth((d-birth)/50),
       dirFn:(sf)=>{const o=1-0.85*smooth(sf*1.4);return tmp.set(ox*o*0.9+Math.sin(sf*5+wob)*0.08,0.35+1.2*smooth(sf),oz*o*0.9+Math.cos(sf*4+wob)*0.08);}});
     axes.push(shoot);
@@ -1023,7 +1056,7 @@ function buildPlant(P){
   const ra=r()*6, rb2=r()*6, TAPL=2.9, rbatch=new Batch(P.rootMat); P.rootBatch=rbatch;
   const tap=new Axis({kind:'root',batch:rbatch,N:56,M:6,Lfinal:TAPL,col:C_ROOT,cast:false,tipRatio:0.12,blend:true,
     base0:rootBase,
-    Lfn:d=>TAPL*(1-Math.pow(1-clamp((d-4)/60),2.2)), radiusFn:stemR,
+    Lfn:d=>TAPL*(1-Math.pow(1-clamp((d-3)/50),2.2)), radiusFn:stemR,
     dirFn:(sf,p)=>steer(tmp.set(Math.sin(sf*5+ra)*0.18,-1,Math.cos(sf*4+rb2)*0.18),p)});
   axes.push(tap);
   const rootAxis=(parent,sP,Lf,birth,dur,out,wob,N,fac)=>{
@@ -1032,6 +1065,10 @@ function buildPlant(P){
       dirFn:(sf,p)=>steer(tmp.set(Math.cos(out)*1+Math.sin(sf*7+wob)*0.2,-(0.3+1.1*sf),Math.sin(out)*1+Math.cos(sf*6+wob)*0.2),p)});
     axes.push(a); return a;
   };
+  for(let q=0;q<16;q++){   // fine root hairs along the young radicle
+    const sH=0.03+q*0.028, Lh=0.07+0.08*r();
+    rootAxis(tap,sH,Lh,tap.reachDay(sH)+0.4,5,r()*TAU,r()*6,4,0.3);
+  }
   for(let q=0;q<8;q++){   // adventitious roots from below the soil line
     const sA=0.01+0.09*r(), Lf=1.8+1.6*r();
     rootAxis(mainAxis,sA,Lf,24+r()*16,34,r()*TAU,r()*6,24,0.45);
@@ -1102,9 +1139,13 @@ function stepField(dt){   // dt in garden days
 }
 function updateSoilColors(){
   const col=soilGeo.attributes.color, pos=soilGeo.attributes.position;
+  const holes=rootsOn?plants.map(P=>({x:P.x,z:P.z,R:0.38+0.55*smooth(P.age/20)})):[];   // see-through patches show the roots starting
   for(let i=0;i<pos.count;i++){
-    const m=sampleField(pos.getX(i),-pos.getY(i)), k=lerp(1.4,0.5,smooth(clamp(m))), w=clamp((m-1)/0.3);
-    col.setXYZ(i,k*(1-0.15*w),k*(1-0.05*w),k*(1+0.12*w));
+    const x=pos.getX(i), z=-pos.getY(i);
+    const m=sampleField(x,z), k=lerp(1.4,0.5,smooth(clamp(m))), w=clamp((m-1)/0.3);
+    let a=1;
+    for(const h of holes){const d=Math.hypot(x-h.x,z-h.z);if(d<h.R*1.3)a=Math.min(a,lerp(0.1,1,smooth((d-0.6*h.R)/(0.7*h.R))));}
+    col.setXYZW(i,k*(1-0.15*w),k*(1-0.05*w),k*(1+0.12*w),a);
   }
   col.needsUpdate=true;
 }
@@ -1160,7 +1201,8 @@ function planTendril(p0,Lf,N,cx,cz,sign){
   for(let i=0;i<=N;i++){
     if(phase===0){
       d.copy(tgt).sub(p);
-      if(d.length()<0.03||i>N*0.55){phase=1;phi=Math.atan2(p.z-cz,p.x-cx);yp=p.y;}
+      if(d.length()<0.03){phase=1;phi=Math.atan2(p.z-cz,p.x-cx);yp=p.y;}
+      else if(i>N*0.7)return null;   // cannot reach the pole, so no tendril
       else{d.normalize();t.lerp(d,0.2).normalize();tans.push(t.clone());p.addScaledVector(t,ds);continue;}
     }
     phi+=sign*ds*Math.cos(alpha)/rc; yp+=ds*Math.sin(alpha);
@@ -1174,21 +1216,21 @@ function planTendril(p0,Lf,N,cx,cz,sign){
 const MAX_AGE=MAX_DAY, DSB=0.5, NB=Math.ceil((12.13-HYPO)/DSB), K_BEND=2e5, ECC=0.07;
 class Plant{
   constructor(x,z){
-    this.id=++plantCounter; this.x=x; this.z=z; this.seed=Math.floor(Math.random()*9e8);
+    this.id=++plantCounter; this.x=x; this.z=z; clearClods(x,z,0.75); this.seed=Math.floor(Math.random()*9e8);
     this.group=new THREE.Group(); this.group.position.set(x,0,z); scene.add(this.group);
     this.disp=[]; this.axes=[]; this.leaves=[]; this.blossoms=[]; this.aerial=[]; this.tendrils=[]; this.main=null; this.trellis=null;
     this.stemMat=tubeMat.clone(); this.rootMat=tubeMat.clone(); this.disp.push(this.stemMat,this.rootMat);
     this.age=0; this.health=1; this.stress=0; this.wilt=0; this.vigor=0; this.moisture=0; this.rate=0; this.brown=0;
-    this.dead=false; this.doomed=false; this.support=0; this.dormant=true; this.deadAttached=0; this.H=0; this.lastAge=-1; this.lastWilt=-1; this.lastBend=0; this.lean=0;
+    this.tieL=null; this.dynDirty=false; this.dead=false; this.doomed=false; this.support=0; this.dormant=true; this.deadAttached=0; this.H=0; this.lastAge=-1; this.lastWilt=-1; this.lastBend=0; this.lean=0;
     const a=Math.random()*TAU; this.wx=Math.cos(a); this.wz=Math.sin(a); this.ax=this.wz; this.az=-this.wx;
     this.theta=new Float32Array(NB); this.phiCum=new Float32Array(NB+1); this.massBins=new Float32Array(NB);
     this.xs=new Float32Array(NB+1); this.xm=new Float32Array(NB);
     buildPlant(this);
     this.aerial=this.axes.filter(a=>a.kind!=='root'&&a.kind!=='tendril');
+    this.aerial.forEach((a,i)=>{a.di=i;});
     this.seedMat=new THREE.MeshStandardMaterial({color:0xdcc088,roughness:.8,transparent:true});
     this.seedMesh=new THREE.Mesh(new THREE.SphereGeometry(1,20,14),this.seedMat);
-    this.seedMesh.position.set(0,-0.03,0); this.seedMesh.rotation.y=Math.random()*TAU; this.group.add(this.seedMesh);
-    this.mound=new THREE.Mesh(moundGeo,moundMat); this.mound.position.set(0.02,groundY(x,z)-0.01,0); this.mound.castShadow=true; this.mound.receiveShadow=true; this.group.add(this.mound);
+    this.seedYaw=Math.random()*TAU; this.seedMesh.position.set(0,SEED_POS.y,0); this.group.add(this.seedMesh);
     this.disp.push(this.seedMat);
     this.sampleMoisture();
   }
@@ -1228,6 +1270,7 @@ class Plant{
     let held=0; for(const a of this.tendrils)if(a.L>=a.Lfinal*0.95)held++;
     this.support=this.trellis?clamp(held/4):0;
     const tied=this.support>0.25;
+    if(tied){if(this.tieL===null)this.tieL=m0.L;}else this.tieL=null;
     for(let b=0;b<active;b++){
       const sb=HYPO+b*DSB;
       let end=active-1;
@@ -1236,10 +1279,12 @@ class Plant{
       for(let j=b;j<=end;j++){S0+=mass[j];S1+=mass[j]*xm[j];S2+=mass[j]*(HYPO+(j+0.5)*DSB);}
       const M=(S1-xs[b]*S0)+ECC*(S2-sb*S0);
       const r=Math.max(m0.radiusAt(sb+DSB/2),0.008), EI=K_BEND*r*r*r;
-      const target=tied&&sb<TRELLIS_H?0:clamp(Math.max(0,M)*DSB/EI,0,0.14);
-      let rate;
-      if(tied)rate=1-Math.exp(-dt*0.12*this.support);
-      else rate=target>th[b]?1-Math.exp(-dt*0.5):1-Math.exp(-dt*0.03);
+      if(tied){   // the tendrils hold what is already bent in place; only fresh growth turns upward along the trellis
+        if(sb>=this.tieL)th[b]+=(-0.015-th[b])*(1-Math.exp(-dt*0.4*this.support));
+        continue;
+      }
+      const target=clamp(Math.max(0,M)*DSB/EI,0,0.14);
+      const rate=target>th[b]?1-Math.exp(-dt*0.5):1-Math.exp(-dt*0.03);
       th[b]+=(target-th[b])*rate;
     }
     let tot=0; for(let b=0;b<NB;b++){if(tot+th[b]>2.4)th[b]=Math.max(0,2.4-tot);tot+=th[b];}
@@ -1278,16 +1323,19 @@ class Plant{
   }
   growTendrils(T){
     const prev=CUR; CUR=this;
-    const main=this.main, tmp=new THREE.Vector3(), r=Math.random;
+    const main=this.main, r=Math.random;
     for(const k of [3,4,6,8,10,12,14,16,18,20]){
-      const sT=nodeS(k)+0.12, Lf=1.7+0.5*r(), N=150, p0=new THREE.Vector3(); main.finAt(sT,p0);
+      const sT=nodeS(k)+0.12, Lf=2.3+0.5*r(), N=150, p0=new THREE.Vector3();
+      if(sT<=main.L)main.posAt(sT,p0);else main.finAt(sT,p0);
       let best=null,bd=1e9;
       for(const pole of T.poles){const d=Math.hypot(pole.x-this.x-p0.x,pole.z-this.z-p0.z);if(d<bd){bd=d;best=pole;}}
       if(bd>1.5)continue;
+      const cx=best.x-this.x, cz=best.z-this.z, sign=r()<0.5?1:-1;
+      const tans0=planTendril(p0,Lf,N,cx,cz,sign); if(!tans0)continue;
       const birth=Math.max(main.reachDay(sT)+3,this.age+0.5+r()*6);
-      const tans=planTendril(p0,Lf,N,best.x-this.x,best.z-this.z,r()<0.5?1:-1);
       const ax=new Axis({kind:'tendril',parent:main,parentS:sT,N,M:4,Lfinal:Lf,col:C_TEND,tipRatio:0.45,cast:false,radiusFn:()=>0.0075,trellisRef:T,
-        Lfn:d=>Lf*smooth((d-birth)/16),dirFn:(sf,p,i)=>tans[Math.min(i,tans.length-1)]});
+        planner:(base)=>planTendril(base,Lf,N,cx,cz,sign),
+        Lfn:d=>Lf*smooth((d-birth)/16),dirFn:(sf,p,i)=>tans0[Math.min(i,tans0.length-1)]});
       this.axes.push(ax); this.tendrils.push(ax);
     }
     CUR=prev; this.lastAge=-1;
@@ -1296,15 +1344,33 @@ class Plant{
     for(const a of this.tendrils)if(a.trellisRef===T){a.removed=true;}
     this.tendrils=this.tendrils.filter(a=>a.trellisRef!==T);
   }
+  /* Real-time spring physics: fruit and leaf weight bends trusses and shoots; removing load makes them bounce back. */
+  dynamics(dt){
+    const main=this.main; if(!main||main.L<0.5)return;
+    const ax=this.aerial, n=ax.length, tot=this.dynMass||(this.dynMass=new Float32Array(n)); tot.fill(0);
+    for(let i=0;i<n;i++)tot[i]+=0.12*ax[i].L;
+    for(const l of this.leaves){if(l.attached&&l.axis.di!==undefined){const sc=l.mesh.scale.x;tot[l.axis.di]+=0.55*sc*sc;}}
+    for(const b of this.blossoms){if(b.fruitVisible&&b.fallClock===null){const r=b.fruit.scale.x;tot[b.truss.di]+=260*r*r*r;}}
+    for(let i=n-1;i>0;i--){const a=ax[i];if(a.parent&&a.parent.di!==undefined)tot[a.parent.di]+=tot[i];}
+    for(let i=1;i<n;i++){
+      const a=ax[i]; if(a.L<0.02||a.removed)continue;
+      const mass=tot[i];
+      const target=a.kind==='truss'?clamp(0.1+0.2*mass,0,1.6):clamp(0.04*mass*Math.min(a.L,3)/(0.25+8*a.rb),0,1.1);
+      if(!a.dvInit){a.dv=target;a.dvel=0;a.dvInit=true;}
+      let rem=Math.min(dt,0.1);
+      while(rem>0){const h=Math.min(rem,0.02);const acc=36*(target-a.dv)-3.2*a.dvel;a.dvel+=acc*h;a.dv+=a.dvel*h;rem-=h;}
+      if(Math.abs(a.dv-a.dvLast)>0.004){this.dynDirty=true;a.dvLast=a.dv;}
+    }
+  }
   visual(time){
     const age=this.age;
     const bendSum=this.lean;
     if(this.lastAge<0||Math.abs(age-this.lastAge)>=0.04){
       for(const a of this.axes)a.update(age);
       this.lastAge=age; this.lastWilt=this.wilt; this.lastBend=bendSum;
-    }else if(Math.abs(this.wilt-this.lastWilt)>0.012||Math.abs(bendSum-this.lastBend)>0.006){
+    }else if(Math.abs(this.wilt-this.lastWilt)>0.012||Math.abs(bendSum-this.lastBend)>0.006||this.dynDirty){
       for(const a of this.aerial)a.update(age);
-      this.lastWilt=this.wilt; this.lastBend=bendSum;
+      this.lastWilt=this.wilt; this.lastBend=bendSum; this.dynDirty=false;
     }
     this.rootBatch.flush();
     let dead=0;
@@ -1314,13 +1380,17 @@ class Plant{
     const br=this.brown;
     this.stemMat.color.setRGB(lerp(1,1.75,br),lerp(1,0.62,br),lerp(1,0.45,br));
     this.rootMat.color.setRGB(lerp(1,0.55,br),lerp(1,0.4,br),lerp(1,0.3,br));
-    const sw=1+0.35*smooth(age/4), husk=smooth((age-4)/6), k=lerp(sw,0.85,husk), s=this.seedMesh;
+    const sw=1+0.35*smooth(age/4), hk=smooth((age-4)/4), k=lerp(sw,0.7,hk), s=this.seedMesh, main=this.main;
     s.scale.set(0.09*k,0.05*k,0.065*k);
-    this.seedMat.color.setRGB(lerp(0.86,0.62,husk),lerp(0.75,0.5,husk),lerp(0.53,0.32,husk));
-    this.seedMat.opacity=1-smooth((age-9)/9); s.visible=this.seedMat.opacity>0.01;
-    const h=0.1*smooth((age-5)/2.2)*(1-smooth((age-8)/7));
-    this.mound.visible=h>0.004; this.mound.scale.set(0.3,Math.max(h,0.001),0.3);
-    const main=this.main;
+    this.seedMat.color.setRGB(lerp(0.86,0.62,hk),lerp(0.75,0.5,hk),lerp(0.53,0.32,hk));
+    if(age<7||main.L<0.05){s.position.set(0,SEED_POS.y,0);s.rotation.set(0,this.seedYaw,0);}
+    else if(age<12.8){main.posAt(main.L,_P);s.position.set(_P.x,_P.y+0.03,_P.z);s.rotation.set(0,this.seedYaw,0.9);}   // the husk rides up on the seed leaves
+    else{
+      const tf=clamp((age-12.8)/0.9); main.posAt(Math.min(main.L,HYPO),_P);
+      const gy=groundY(this.x+_P.x,this.z+_P.z)+0.03;
+      s.position.set(_P.x+0.12*tf,lerp(_P.y+0.03,gy,tf*tf),_P.z); s.rotation.set(0,this.seedYaw,lerp(0.9,0.1,tf));
+    }
+    this.seedMat.opacity=1-smooth((age-14)/7); s.visible=this.seedMat.opacity>0.01;
     this.H=main.L>0.002?Math.max(0,main.pos[3*main.N+1]):0;
   }
   status(){
@@ -1626,7 +1696,7 @@ function addCard(P){
    +'<p class="note"></p>';
   $('garden').appendChild(el);
   $('gardenEmpty').hidden=true;
-  el.addEventListener('click',e=>{if(e.target.closest('.x'))return;view.pan.set(P.x,0,P.z);});
+  el.addEventListener('click',e=>{if(e.target.closest('.x'))return;view.pan.set(P.x,0,P.z);view.user.zoom=0.35;});
   el.querySelector('.x').addEventListener('click',()=>uproot(P));
   cards.set(P.id,{el,chip:el.querySelector('.chip'),stage:el.querySelector('.stage'),water:el.querySelector('.fill.water'),health:el.querySelector('.fill.health'),note:el.querySelector('.note')});
   updateCard(P);
@@ -1680,6 +1750,7 @@ function frame(now){
     if(autoWater)for(const P of plants){if(P.dead||P.doomed)continue;const m=P.sampleMoisture();if(m<0.55)addWater(P.x,P.z,1.1,(0.62-m)*3*dt);}
     clock+=dt;stepField(dt);for(const P of plants)P.tick(dt);
   }
+  for(const P of plants)P.dynamics(rdt);
   if(pouring)addWater(pourAt.x,pourAt.z,0.8,1.5*rdt);
   updatePour(rdt); updateMarker();
   if(now-soilT>110){soilT=now;updateSoilColors();}
